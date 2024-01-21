@@ -1,0 +1,32 @@
+{
+    "davis_weatherlinkIP_interface": {
+        "user": "The Device ID found under Device Info from your Davis account",
+        "password": "Your Davis account password"
+     },
+    "OR_davis_console_interface": {
+        "api_key": "Get this API Key V2 from your Davis...",
+        "api_secret": "...Account Information screen",
+        "station_name": "The is set via your 6313 Console"
+     },
+     "operating_hours": {
+         "24_hours_per_day": false,
+         "on_time": "07:00",
+         "off_time": "22:00"
+     },
+     "dimmer": {
+         "use_sensor": true,
+         "daylight_offset_minutes": 20,
+         "max_brightness_percent": 100,
+         "min_brightness_percent": 20
+     },
+     "UV": {
+         "sunrise_sunset_offset_minutes": 0,
+         "alternate_with_hi_lo_temp": true,
+         "hi_lo_temp_length_seconds": 10
+     },
+    "adafruit_IO": {
+        "user": "Optional username would go here",
+        "key": "And key would go here"
+     },
+}
+
