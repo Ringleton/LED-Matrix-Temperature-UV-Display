@@ -1024,10 +1024,12 @@ def main_loop(data):
 
             data.io_client.send(CPU_TEMP_FEED, message)
             
-        except RequestError:
+        except (requests.exceptions.RequestException, RequestError):
             pass
             # We don't care if this fails or why as we will
             # receive the email notification after one hour
+            # First exception above captures Connection error timeouts
+            # and second exception captures a bad API key
 
     # Fire this main loop again in 60 seconds
     data.timer_main = threading.Timer(60, main_loop, [data])

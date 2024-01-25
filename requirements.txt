@@ -1,0 +1,8 @@
+Adafruit_Blinka==8.24.0
+adafruit_circuitpython_veml7700==1.1.21
+adafruit_io==2.7.1
+gpiozero==1.6.2
+psutil==5.8.0
+pyephem==9.99
+pynput==1.7.6
+Requests==2.31.0
