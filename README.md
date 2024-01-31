@@ -2,9 +2,7 @@
 # Overview
 This display utilizes a WIFI connection to read data from a weather server.  The display uses data produced by a Davis Instruments weather server and gets its data populated by its branded weather stations ([www.davisinstruments.com](http://www.davisinstruments.com)).  The source of the data used for this matrix display is produced by a Davis weather station set up in the Cadence neighborhood.  That station transmits data wirelessly to either a legacy data logger and/or a newer display console.  Those two systems separately upload their data to the Davis server, and it is that data that is then retrieved by the matrix display unit every 60 seconds, displaying the current temperature and UV Index.  The Davis server also maintains a web page for each station that shows the weather statistics for each.
 
-![A digital electronic piano with a sign on it
-
-Description automatically generated](Aspose.Words.e16265f7-17f7-4822-bf38-439d12c9a9b4.001.jpeg)
+![001](https://github.com/Ringleton/LED-Matrix-Temperature-UV-Display/assets/157074435/257de8e7-dc1d-4d5d-825c-b658bd5483d0)
 
 This LED matrix display is built using a Raspberry Pi Zero 2 W, single board computer along with an Adafruit RGB matrix “bonnet” plugged into the top of the Pi.  The bonnet converts the Pi’s 3.3V output pins to 5.0V logic along with a socket to connect a cable to the input of one of the two 64 X 32 RGB LED matrix, 3mm pitch (P3) panels.
 
@@ -296,17 +294,17 @@ One side of the pushbutton is connected to ground, the other connects to GPIO pi
 | :- | :- | :- | :- |
 |Bottom Row|Not used|<p>Yellow</p><p>SCL</p>|<p>Blue</p><p>SCA</p>|
 
-![A close up of a circuit board
 
-Description automatically generated](Aspose.Words.e16265f7-17f7-4822-bf38-439d12c9a9b4.002.jpeg)
 
-![](Aspose.Words.e16265f7-17f7-4822-bf38-439d12c9a9b4.003.jpeg)
+![002](https://github.com/Ringleton/LED-Matrix-Temperature-UV-Display/assets/157074435/2a9dbf71-9bf8-4eac-a435-fb3cadde1af1)
 
-![A black rectangular object with wires
+![003](https://github.com/Ringleton/LED-Matrix-Temperature-UV-Display/assets/157074435/b67d66e3-179f-496a-886f-ee0c47e1ac95)
 
-Description automatically generated](Aspose.Words.e16265f7-17f7-4822-bf38-439d12c9a9b4.004.png)
+![004](https://github.com/Ringleton/LED-Matrix-Temperature-UV-Display/assets/157074435/1bf071d7-f117-45a3-88bb-6c8c3fe26630)
 
-![](Aspose.Words.e16265f7-17f7-4822-bf38-439d12c9a9b4.005.png)
+![005](https://github.com/Ringleton/LED-Matrix-Temperature-UV-Display/assets/157074435/86b78718-b918-436b-bb26-8d69b2e01381)
+
+
 # Parts List
 
 |**Part Description**|**Supplier**|**Part #**|**Qty**|
