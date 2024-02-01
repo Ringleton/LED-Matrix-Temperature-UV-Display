@@ -26,7 +26,14 @@
      },
     "adafruit_IO": {
         "user": "Optional username would go here",
-        "key": "And key would go here"
+        "key": "And key would go here",
+        "feed": "Feed name aka key"
      },
+    "locale" : {
+        "latitude": 50.1234,
+        "longitude": -119.9876,
+        "really_hot": 35,
+        "really_cold": -20
+     }
 }
 

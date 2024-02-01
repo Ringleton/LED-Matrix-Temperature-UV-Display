@@ -1,9 +1,7 @@
-# January 20, 2024
-# Moved the Adafruit username and key from this source file to the config.json file
-# Fixed Adafruit IO exception error trapping 
-
-# January 17, 2024
-# Added logging
+# January 28, 2024
+# Moved the Adafruit feed name key and locale info from this source file
+# to the config.json file
+# Fixed exception trap for no light sensor
 
 # LED matrix temperature / UV display
 # Written by Russell Ingleton 2023
@@ -42,18 +40,7 @@ from gpiozero import CPUTemperature  # for testing.  CPU temperature monitoring
 # For Adafruit IoT feed that montiors CPU temp but also acts as a warning
 # if the feed stops receiving information
 from Adafruit_IO import Client, RequestError
-# Set the Adafruit IoT feed name
-CPU_TEMP_FEED = 'matrix-cpu-temp-and-keep-alive'
 
-# Longitude, latitude location.  Used to determine sunrise / sunset.
-MY_LOCATION_LAT = '50.0732'
-MY_LOCATION_LON = '-119.415'
-
-# This sets the max and min temperatures for what will be the most red (hot) and
-# most purple (cold) colors.  Values beyond these will stay at their max color.
-# Set appropriately for your locale
-REALLY_HOT = 35
-REALLY_COLD = -20
 
 def args():
     parser = argparse.ArgumentParser()
@@ -209,9 +196,20 @@ class Config:
         if self.hi_lo_temp_length_seconds > 50:
             self.hi_lo_temp_length_seconds = 50
 
-        # Using Adafruit IO to upload CPU temp and monitor if down.
+        # Using Adafruit IO feed to upload statistics and monitor if down.
         self.adafruitIO_user = jdata["adafruit_IO"]["user"]
         self.adafruitIO_key = jdata["adafruit_IO"]["key"]
+        self.adafruitIO_feed = jdata["adafruit_IO"]["feed"]
+
+        # Longitude, latitude location.  Used to determine sunrise / sunset.
+        self.my_location_lat = str(jdata["locale"]["latitude"])
+        self.my_location_lon = str(jdata["locale"]["longitude"])
+
+        # This sets the max and min temperatures for what will be the most red (hot) and
+        # most purple (cold) colors.  Values beyond these will stay at their max color.
+        # Set appropriately for your locale
+        self.really_hot = jdata["locale"]["really_hot"]
+        self.really_cold = jdata["locale"]["really_cold"]
 
 
 class Data:
@@ -262,10 +260,10 @@ class Data:
         if self.config.use_sensor:
             try:
                 self.i2c = board.I2C()
-                self.lux_sensor_available = True
 
                 # Grab first reading to ensure sensor is available
                 sensor = adafruit_veml7700.VEML7700(self.i2c)
+                self.lux_sensor_available = True
 
             except:
                 logging.warning('Light sensor not found or not connected, falling back to software mode.')
@@ -608,20 +606,20 @@ def get_temp(data):
             else:
                 return (1, "Warning")
 
-def get_colour(temp):
+def get_colour(temp, really_hot = 40, really_cold = -30):
 
     # cap out at the max temps allowed
-    if temp > REALLY_HOT:
-        temp = REALLY_HOT
-    elif temp < REALLY_COLD:
-        temp = REALLY_COLD
+    if temp > really_hot:
+        temp = really_hot
+    elif temp < really_cold:
+        temp = really_cold
 
     if temp >= 0:
-        full_range = REALLY_HOT
-        # z = (REALLY_HOT - temp) / full_range * 190 + 20  # 20 - 210
-        z = (REALLY_HOT - temp) / full_range * 210  # 0 - 210
+        full_range = really_hot
+        # z = (really_hot - temp) / full_range * 190 + 20  # 20 - 210
+        z = (really_hot - temp) / full_range * 210  # 0 - 210
     else:
-        full_range = -REALLY_COLD
+        full_range = -really_cold
         z = (-temp) / full_range * 90 + 210  # 210 - 300
 
     r, yellow, b = colorsys.hsv_to_rgb(z / 360.0, 1.0, 1.0)
@@ -649,11 +647,11 @@ def get_colour_UV(UV):
         return (206, 49, 254)
 
 
-def get_sunrise_sunset():
+def get_sunrise_sunset(data):
     my_location = ephem.Observer()
 
-    my_location.lat = MY_LOCATION_LAT
-    my_location.lon = MY_LOCATION_LON
+    my_location.lat = data.config.my_location_lat
+    my_location.lon = data.config.my_location_lon
 
     sun = ephem.Sun()
 
@@ -672,22 +670,22 @@ def get_sunrise_sunset():
     return (sunrise, sunset, current)
 
 
-def is_bright(offset):
+def is_bright(data):
     # Is it bright outside?  Sun may not be above the horizon but it could be dawn or dusk.
     # Offset is the time before sunrise or after sunset when it is still considered bright outside.
     # Used to determine display brightness if not using light sensor
 
-    sunrise, sunset, current = get_sunrise_sunset()
-    return (sunrise - offset * ephem.minute < current < sunset + offset * ephem.minute)
+    sunrise, sunset, current = get_sunrise_sunset(data)
+    return (sunrise - data.config.daylight_offset_minutes * ephem.minute < current < sunset + data.config.daylight_offset_minutes * ephem.minute)
 
 
-def is_sun_above(offset):
+def is_sun_above(data):
     # Is the sun above the horizon?  Sun may be above a flat horizon but not above our mountaintops.
     # Offset adds / subtracts the extra minutes for our mountains.
     # Used to determine when we start showing the UV value.  No point when sun not above our horizon.
 
-    sunrise, sunset, current = get_sunrise_sunset()
-    return (sunrise + offset * ephem.minute < current < sunset - offset * ephem.minute)
+    sunrise, sunset, current = get_sunrise_sunset(data)
+    return (sunrise + data.config.sunrise_sunset_offset_minutes * ephem.minute < current < sunset - data.config.sunrise_sunset_offset_minutes * ephem.minute)
 
 
 def set_brightness(data):
@@ -718,7 +716,7 @@ def set_brightness(data):
         data.matrix.brightness = b
 
     else:
-        if is_bright(data.config.daylight_offset_minutes):
+        if is_bright(data):
             data.matrix.brightness = data.config.max_brightness_percent
         else:
             data.matrix.brightness = data.config.min_brightness_percent
@@ -774,7 +772,7 @@ def refresh_display(data):
         r = g = b = 150
     else:
         sTemp = '%.1f' % data.temp_now
-        r, g, b = get_colour(data.temp_now)
+        r, g, b = get_colour(data.temp_now, data.config.really_hot, data.config.really_cold)
 
     temp_color = graphics.Color(r, g, b)
 
@@ -783,7 +781,7 @@ def refresh_display(data):
         r = g = b = 150
     else:
         sHi = '%.1f' % data.temp_high
-        r, g, b = get_colour(data.temp_high)
+        r, g, b = get_colour(data.temp_high, data.config.really_hot, data.config.really_cold)
 
     temp_high_color = graphics.Color(r, g, b)
 
@@ -792,7 +790,7 @@ def refresh_display(data):
         r = g = b = 150
     else:
         sLo = '%.1f' % data.temp_low
-        r, g, b = get_colour(data.temp_low)
+        r, g, b = get_colour(data.temp_low, data.config.really_hot, data.config.really_cold)
 
     temp_low_color = graphics.Color(r, g, b)
 
@@ -982,7 +980,7 @@ def main_loop(data):
         if success:
             # We have good data for displaying
 
-            if not is_sun_above(data.config.sunrise_sunset_offset_minutes):
+            if not is_sun_above(data):
                 # This sun is not high in the sky so show the high/lows
                 data.show_hi_lo_temp = True
 
@@ -1022,7 +1020,7 @@ def main_loop(data):
             else:
                 message += "%3d" % light
 
-            data.io_client.send(CPU_TEMP_FEED, message)
+            data.io_client.send(data.config.adafruitIO_feed, message)
             
         except (requests.exceptions.RequestException, RequestError):
             pass
