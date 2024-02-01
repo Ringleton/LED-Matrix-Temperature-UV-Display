@@ -239,7 +239,7 @@ To test your autostart file, reboot the Pi – you can use the pushbutton if ena
 # Adafruit IoT Monitoring
 The display includes the optional ability to upload internal statistics to an Adafruit IoT feed.  You can set up a free Adafruit account and create a feed.  You can configure the Adafruit feed to provide an email notification after a period of inactivity.  This can alert an administrator that the display is down or has lost its WIFI connection.
 
-Enter your account and feed information into the config.json file as noted above in the [Program Configuration[(README.md#Program-Configuration) section.  The following information is sent to the feed:
+Enter your account and feed information into the config.json file as noted above in the [Program Configuration](README.md#Program-Configuration) section.  The following information is sent to the feed:
 
 **CPU T:**	The internal CPU temperature.  The Pi will withstand temperatures up to 85 degrees Celsius.  As it gets closer to its upper limit, the system will automatically begin to throttle the processor down to try to help the CPU cool back down.
 
