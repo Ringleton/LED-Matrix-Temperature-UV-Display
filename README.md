@@ -119,11 +119,11 @@ The LED-matrix library is copyrighted by Henner Zeller and a more in-depth expla
 While you can view the links above, the software installation steps for the RGB matrix library files included in the links above are shown here…
 
 Start a terminal window and while in the home folder, enter these commands:
-```
-curl https://raw.githubusercontent.com/adafruit/Raspberry-Pi-Installer-Scripts/main/rgb-matrix.sh >rgb-matrix.sh
 
-sudo bash rgb-matrix.sh
-```
+`curl https://raw.githubusercontent.com/adafruit/Raspberry-Pi-Installer-Scripts/main/rgb-matrix.sh >rgb-matrix.sh`
+
+`sudo bash rgb-matrix.sh`
+
 As noted in their instructions, this step will take several minutes to complete.  The system will prompt you to reboot.
 
 As we are using a jumper to implement the “quality” option on the RGB matrix (see the learn.Adafruit.com link above), the sound card in the Pi must be disabled so as not to interfere.
@@ -149,13 +149,13 @@ With the latest OS, it is necessary to further disable the sound card by enterin
 You will need to reboot again for the changes above to take effect.
 
 Now that the RGB library files are installed, we will install our Python programs.  After rebooting, start a terminal window again and while in the home folder, enter the following commands:
-```
-git clone https://github.com/Ringleton/LED-Matrix-Temperature-UV-Display.git ./LED_matrix
 
-cd LED_matrix
+`git clone https://github.com/Ringleton/LED-Matrix-Temperature-UV-Display.git ./LED_matrix`
 
-sudo pip install -r requirements.txt
-```
+`cd LED_matrix`
+
+`sudo pip install -r requirements.txt`
+
 It is now necessary to create a configuration file.  While still in the LED\_matrix folder, type:
 
 `cp config.json.sample config.json`
@@ -183,13 +183,13 @@ At the very end of the single line, add a space, followed by `isolcpus=3`
 Press CTRL-X to exit and save the file.
 
 You will need to reboot for this change to take effect.  Then see if the warning message has cleared by manually launching the program again from a terminal window:
-```
-cd ~
 
-cd LED_matrix
+`cd ~`
 
-sudo python temp_display.py
-```
+`cd LED_matrix`
+
+`sudo python temp_display.py`
+
 # Automatic Start Files
 The display also includes a pushbutton that can be used to reboot or shutdown the Pi safely without having to first connect to it.  The monitoring of this pushbutton is performed by a separate program in case the main display program terminates or becomes non-responsive.  
 
@@ -210,17 +210,17 @@ To test this, reboot the Pi.  Once it has rebooted, try momentarily pressing the
 To make the main display program automatically start every time the Pi is powered up or rebooted, you will need to create an autostart file.  Before proceeding, ensure that the display program is running correctly when invoked manually as shown above.
 
 Then from a terminal window, type the following lines:
-```
-cd ~
 
-cd .config
+`cd ~`
 
-mkdir autostart
+`cd .config`
 
-cd autostart
+`mkdir autostart`
 
-sudo nano display.desktop
-```
+`cd autostart`
+
+`sudo nano display.desktop`
+
 Enter the following lines:
 ```
 [Desktop Entry]
