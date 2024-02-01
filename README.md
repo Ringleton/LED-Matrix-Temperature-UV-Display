@@ -1,10 +1,11 @@
-﻿Temperature Display
+# ﻿Temperature and UV Index RGB Matrix Display
+
 # Overview
 This display utilizes a WIFI connection to read data from a weather server.  The display uses data produced by a Davis Instruments weather server and gets its data populated by its branded weather stations ([www.davisinstruments.com](http://www.davisinstruments.com)).  The source of the data used for this matrix display is produced by a Davis weather station set up in the Cadence neighborhood.  That station transmits data wirelessly to either a legacy data logger and/or a newer display console.  Those two systems separately upload their data to the Davis server, and it is that data that is then retrieved by the matrix display unit every 60 seconds, displaying the current temperature and UV Index.  The Davis server also maintains a web page for each station that shows the weather statistics for each.
 
 ![001](https://github.com/Ringleton/LED-Matrix-Temperature-UV-Display/assets/157074435/257de8e7-dc1d-4d5d-825c-b658bd5483d0)
 
-This LED matrix display is built using a Raspberry Pi Zero 2 W, single board computer along with an Adafruit RGB matrix “bonnet” plugged into the top of the Pi.  The bonnet converts the Pi’s 3.3V output pins to 5.0V logic along with a socket to connect a cable to the input of one of the two 64 X 32 RGB LED matrix, 3mm pitch (P3) panels.
+This LED matrix display is built using a Raspberry Pi Zero 2 WH, single board computer along with an Adafruit RGB matrix “bonnet” plugged into the top of the Pi.  The bonnet converts the Pi’s 3.3V output pins to 5.0V logic along with a socket to connect a cable to the input of one of the two 64 X 32 RGB LED matrix, 3mm pitch (P3) panels.
 
 The Pi’s external connectors are exposed at the rear inset of the enclosure, along with a separate power supply connection (5V, 10A) and a pushbutton that acts as either a reboot or shutdown trigger.  You can connect a video display to the Pi’s mini-HDMI connector and a mouse / keyboard dongle to the Pi’s micro-USB On-The-Go (OTG) port to interact and control the system.  Optionally, you can also use a terminal emulator connected over WIFI.  The Pi uses a Unix-based operating system.  The program itself is written in Python.
 
@@ -38,69 +39,44 @@ Once you have established the WIFI connection, you may want to revert to using t
 # Program Configuration
 The following assumes the user has basic knowledge of navigating through the Pi’s folder structure and how to edit a text file as those are beyond the scope of this document.
 
-The display has a few user-configured options such as which Davis weather station to monitor and its operating hours.  To change the configuration, you will need to connect to the Pi using either of the methods noted above.  From the Home directory, navigate to the LED\_matrix folder.  For an existing system, in there you will find a configuration file named “config.json”.  For new installations, there is also a “config.json.sample” file that can be renamed or copied over.
+The display has a few user-configured options such as which Davis weather station to monitor and its operating hours.  To change the configuration, you will need to connect to the Pi using either of the methods noted above.  From the Home directory, navigate to the LED\_matrix folder.  For an existing system, in there you will find a configuration file named “config.json”.  For new installations, there is also a “config.json.sample” file that can be renamed or copied over.  The instructions for that are found further down in the Installing the Software section.
 
-Use a text editor to make any changes.  For example, from a terminal window and in the LED-matrix folder, type: sudo nano config.json
+Use a text editor to make any changes.  For example, from a terminal window and in the LED\_matrix folder, type: `sudo nano config.json`
 
 The following options are found:
 
-`    `"davis\_weatherlinkIP\_interface": This is the legacy WeatherLinkIP device.
+Property| |Description
+--- | --- | ---
+|`davis_weatherlinkIP_interface`||These are used for the legacy WeatherLinkIP device.
+||`user`|Contrary to its name, this is the “Device ID” (DID) found under the “Device Info” screen when logged into your Davis account.  This is also shown on the back of the WeatherLinkIP device.  If this field is left blank, then the display will use the information and data from the newer console found in the next section.  If this field is not blank, then any information found in the next Console interface section is ignored.
+||`password`|This is the same password you use to log into your Davis account.
+|`OR_davis_console_interface`||These are for the newer 6313 Console.
+||`api_key`|This key and its secret are found under your Davis “Account Information” screen, shown as “API Key V2"
+||`api_secret`|
+||`station_name`|This name is **case-sensitive** and set via the 6313 Console.  It is currently set to “Cadence at The Lakes”.
+|`operating_hours`||Outside of the operating hours, the display will go blank and show only a blinking cursor in the lower right corner.
+||`24_hours_per_day`|Set to `true` or `false`.  If false, the next two values are used.
+||`on_time`|
+||`off_time`|
+|`dimmer`||The display can adjust its brightness based on the ambient light levels as detected by an optional light sensor found on the front edge of the display.
+||`use_sensor`| If set to `true`, the sensor is used and the remaining options in this section are ignored.  The brightness of the display is adjusted every minute based on the current ambient light level.
+||`daylight_offset_minutes`|If the sensor is not used or can’t be found, then the display calculates sunrise and sunset for this location and subtracts the value noted here from the sunrise or adds it to the sunset to estimate daylight hours.  During the daylight period, it sets the display brightness to the max setting below and outside of daylight hours, it sets the display brightness to the min setting.
+||`max_brightness_percent`|Daylight brightness setting.
+||`min_brightness_percent`|Nighttime brightness setting.
+|`UV`||When the sun is above the horizon, the UV index is shown on the right side of the display.  When the sun has set, only the day’s high and low temperatures are shown.  When the UV is shown, you can optionally alternate the UV index with the high and low temperatures.
+||`sunrise_sunset_offset_minutes`|The value here is added to the sunrise and subtracted from the sunset to estimate when the sun rises above or sets below the mountains as opposed to a flat horizon.  This is used to estimate the time during the day when sun is truly in view and thus, the UV index is shown.
+||`alternate_with_hi_lo_temp`|If set to true, during the daytime, the right side of the display alternates between the UV index and the high and low temperatures.  Otherwise, the UV index is always shown during the day.
+||`hi_lo_temp_length_seconds`|During each 60 second period, this is the number of seconds that the high and low temperatures are shown instead of the UV index.
+|`adafruit_IO`||The following information is optional.  A free IoT account can be created at Adafruit.com.  Every 10 minutes, this display uploads information about itself, for example, internal CPU temperature, error count and current uptime.  The Adafruit IoT feed can be configured to send an email after a configured amount of inactivity thereby alerting an administrator that the display may be down or has lost WIFI connectivity.
+||`user`|Enter your Adafruit username here.
+||`key`|Adafruit API key.
+||`feed`|Adafruit feed name “key”.
+|`locale`||Information for your locale.  Used to determine sunrise, sunset, and temperature colours.
+||`latitude`|Enter your latitude here.
+||`longitude`|Longitude.
+||`really_hot`|Temperatures above this will be red.
+||`really_cold`|Temperatures below this will be purple.
 
-`        `"user": Contrary to its name, this is the “Device ID” (DID) found under the “Device Info” screen when logged into your Davis account.  This is also shown on the back of the WeatherLinkIP device.  If this field is left blank, then the display will use the information and data from the newer console found in the next section.  If this field is not blank, then any information found in the next Console interface section is ignored.
-
-`        `"password": This is the same password you use to log into your Davis account.
-
-`    `"OR\_davis\_console\_interface": This is the newer 6313 Console.
-
-`        `"api\_key":
-
-`        `"api\_secret": The above key and its secret are found under your Davis “Account Information” screen, shown as “API Key V2"
-
-`        `"station\_name": This name is **case-sensitive** and set via the 6313 Console.  It is currently set to “Cadence at The Lakes”.
-
-`     `"operating\_hours": Outside of the operating hours, the display will go blank and show only a blinking cursor in the lower right corner.
-
-`         `"24\_hours\_per\_day": Set to true or false.  If false, the next two values are used.
-
-`         `"on\_time":
-
-`         `"off\_time":
-
-`     `"dimmer": The display can adjust its brightness based on the ambient light levels as detected by an optional light sensor found on the front edge of the display.
-
-`         `"use\_sensor": If set to true, the sensor is used and the remaining options in this section are ignored.  The brightness of the display is adjusted every minute based on the current ambient light level.
-
-`         `"daylight\_offset\_minutes": If the sensor is not used or can’t be found, then the display calculates sunrise and sunset for this location and subtracts the value noted here from the sunrise or adds it to the sunset to estimate daylight hours.  During the daylight period, it sets the display brightness to the max setting below and outside of daylight hours, it sets the display brightness to the min setting.
-
-`         `"max\_brightness\_percent":
-
-`         `"min\_brightness\_percent":
-
-`     `"UV": When the sun is above the horizon, the UV index is shown on the right side of the display.  When the sun has set, only the day’s high and low temperatures are shown.  When the UV is shown, you can optionally alternate the UV index with the high and low temperatures.
-
-`         `"sunrise\_sunset\_offset\_minutes": The value here is added to the sunrise and subtracted from the sunset to estimate when the sun rises above or sets below the mountains as opposed to a flat horizon.  This is used to estimate the time during the day when sun is truly in view and thus, the UV index is shown.
-
-`         `"alternate\_with\_hi\_lo\_temp": If set to true, during the daytime, the right side of the display alternates between the UV index and the high and low temperatures.  Otherwise, the UV index is always shown during the day.
-
-`         `"hi\_lo\_temp\_length\_seconds": During each 60 second period, this is the number of seconds that the high and low temperatures are shown instead of the UV index.
-
-`    `"adafruit\_IO": The following information is optional.  A free IoT account can be created at Adafruit.com.  Every 10 minutes, this display uploads information about itself, for example, internal CPU temperature, error count and current uptime.  The Adafruit IoT feed can be configured to send an email after a configured amount of inactivity thereby alerting an administrator that the display may be down or has lost WIFI connectivity.
-
-`        `"user": Enter your Adafruit username here.
-
-`        `"key": Adafruit API key.
-
-`        `"feed": Adafruit feed name “key”.
-
-`    `"locale": Information for your locale.  Used to determine sunrise, sunset, and temperature colours.
-
-`        `"latitude": Enter your latitude here.
-
-`        `"longitude": Longitude.
-
-`        `"really\_hot": Temperatures above this will be red.
-
-`        `"really\_cold": Temperatures below this will be purple.
 
 # Error Messages
 If the display encounters any issues with either connectivity or the retrieved data, depending on the issue, it will attempt to automatically recover.  During the recovery period, it may display an error message.
@@ -143,56 +119,56 @@ The LED-matrix library is copyrighted by Henner Zeller and a more in-depth expla
 While you can view the links above, the software installation steps for the RGB matrix library files included in the links above are shown here…
 
 Start a terminal window and while in the home folder, enter these commands:
-
+```
 curl https://raw.githubusercontent.com/adafruit/Raspberry-Pi-Installer-Scripts/main/rgb-matrix.sh >rgb-matrix.sh
 
 sudo bash rgb-matrix.sh
-
+```
 As noted in their instructions, this step will take several minutes to complete.  The system will prompt you to reboot.
 
 As we are using a jumper to implement the “quality” option on the RGB matrix (see the learn.Adafruit.com link above), the sound card in the Pi must be disabled so as not to interfere.
 
-sudo nano /boot/config.txt
+`sudo nano /boot/config.txt`
 
 In this file, look for the line containing “dtparam”.  If necessary, edit this line so that it reads:
 
-dtparam=audio=off
+`dtparam=audio=off`
 
 Press CTRL-X to exit the editor and if changes were made, confirm “Save modified buffer”.
 
 With the latest OS, it is necessary to further disable the sound card by entering the following commands:
 
-cat <<EOF | sudo tee /etc/modprobe.d/blacklist-rgb-matrix.conf
+`cat <<EOF | sudo tee /etc/modprobe.d/blacklist-rgb-matrix.conf`
 
-\> blacklist snd\_bcm2835
+\> `blacklist snd_bcm2835`
 
-\> EOF
+\> `EOF`
 
-sudo update-initramfs -u
+`sudo update-initramfs -u`
 
 You will need to reboot again for the changes above to take effect.
 
 Now that the RGB library files are installed, we will install our Python programs.  After rebooting, start a terminal window again and while in the home folder, enter the following commands:
+```
+git clone https://github.com/Ringleton/LED-Matrix-Temperature-UV-Display.git ./LED_matrix
 
-git clone https://github.com/Ringleton/LED-Matrix-Temperature-UV-Display.git ./LED\_matrix
-
-cd LED\_matrix
+cd LED_matrix
 
 sudo pip install -r requirements.txt
-
+```
 It is now necessary to create a configuration file.  While still in the LED\_matrix folder, type:
 
-cp config.json.sample config.json
+`cp config.json.sample config.json`
 
 Edit this file by typing:
 
-sudo nano config.json
+`sudo nano config.json`
 
 See the Program Configuration section above to make the necessary changes.  Once completed, press CTRL-X to exit the editor and save your changes.
 
 Before setting up the automatic start feature for the display and optional reboot/shutdown button, test the program now by manually launching it.  While you are still in the LED\_matrix folder, type:
 
-sudo python temp\_display.py
+`sudo python temp_display.py`
 
 If everything is working correctly, after a few seconds, you should see temperatures shown in the display.  If any error messages appear, you will need to address them.  They will appear on the screen when the program is run interactively but some will also be placed into a file named “logfile.log”.  This log file contains information messages, warning and errors and is overwritten each time the program is started.
 
@@ -200,40 +176,41 @@ To manually terminate the program, press CTRL-C.
 
 NOTE: When launching the program, you may see a warning message suggesting editing the /boot/cmdline.txt file and adding “isolcpus=3” to the very end.  If you see that, from a terminal window, type the following command:
 
-sudo nano /boot/cmdline.txt
+`sudo nano /boot/cmdline.txt`
 
-At the very end of the single line, add a space, followed by isolcpus=3
+At the very end of the single line, add a space, followed by `isolcpus=3`
 
 Press CTRL-X to exit and save the file.
 
 You will need to reboot for this change to take effect.  Then see if the warning message has cleared by manually launching the program again from a terminal window:
-
+```
 cd ~
 
-cd LED\_matrix
+cd LED_matrix
 
-sudo python temp\_display.py
+sudo python temp_display.py
+```
 # Automatic Start Files
 The display also includes a pushbutton that can be used to reboot or shutdown the Pi safely without having to first connect to it.  The monitoring of this pushbutton is performed by a separate program in case the main display program terminates or becomes non-responsive.  
 
 If you want the rear button enabled to allow reboot / shutdown capability, you will need to edit the rc.local file.  From a terminal window, type:
 
-sudo nano /etc/rc.local
+`sudo nano /etc/rc.local`
 
 Immediately above the “exit 0” line, add:
 
-python /home/**cadence**/LED\_matrix/restart\_shutdown.py &
+`python /home/cadence/LED_matrix/restart_shutdown.py &`
 
 **NOTE: if you have prepared the Pi using a different default user other than “cadence”, replace the occurrence above with your default username.**
 
 Don’t forget the space and ampersand at the end of the line.  Press CTRL-X to exit and save the file.
 
-To test this, reboot the Pi.  Once it has rebooted, try momentarily pressing the pushbutton on the back of the display enclosure.  The Pi should reboot.
+To test this, reboot the Pi.  Once it has rebooted, try momentarily pressing the pushbutton on the back of the display enclosure.  The Pi should reboot.  Pressing and holding the button for at least two seconds will cause the Pi to shutdown.  Allow at least 20 seconds before disconnecting the power.
 
 To make the main display program automatically start every time the Pi is powered up or rebooted, you will need to create an autostart file.  Before proceeding, ensure that the display program is running correctly when invoked manually as shown above.
 
 Then from a terminal window, type the following lines:
-
+```
 cd ~
 
 cd .config
@@ -243,18 +220,18 @@ mkdir autostart
 cd autostart
 
 sudo nano display.desktop
-
+```
 Enter the following lines:
-
+```
 [Desktop Entry]
 
 Type=Application
 
 Name=Display
 
-Exec=bash -c 'cd /home/**cadence**/LED\_matrix && sudo /usr/bin/python /home/**cadence**/LED\_matrix/temp\_display.py'
-
-**NOTE: The above may wrap around in this document.  There is a single space after the words “sudo” and “python”.  If you have prepared the Pi using a different default user other than “cadence”, replace the occurrences above with your default username.**
+Exec=bash -c 'cd /home/cadence/LED_matrix && sudo /usr/bin/python /home/cadence/LED_matrix/temp_display.py'
+```
+**NOTE: If you have prepared the Pi using a different default user other than “cadence”, replace the occurrences above with your default username.**
 
 Press CTRL-X to exit and save your changes.  
 
@@ -270,7 +247,7 @@ Enter your account and feed information into the config.json file as noted above
 
 **Up:**  The total number of days that the program has been running.
 
-**Mem Use:**  The total percentage of memory consumed by the program.
+**Mem Use:**  The total percentage of used memory.
 
 **Set to:**  The display brightness percentage level.  Based on either the optional light sensor or the configuration settings with the time of day.
 
@@ -290,10 +267,10 @@ The optional VEML7700 light sensor and restart / shutdown pushbutton are connect
 
 One side of the pushbutton is connected to ground, the other connects to GPIO pin 19.  The light sensor connects to a 3 X 2 header on the bonnet.  Looking from the top of the bonnet with the connector towards the right:
 
-|Top Row|<p>Black</p><p>Ground</p>|<p>Red</p><p>3\.3V</p>|Not used|
+||<p></p><p></p>|<p></p><p></p>||
 | :- | :- | :- | :- |
+|Top Row|<p>Black</p><p>Ground</p>|<p>Red</p><p>3\.3V</p>|Not used|
 |Bottom Row|Not used|<p>Yellow</p><p>SCL</p>|<p>Blue</p><p>SCA</p>|
-
 
 
 ![002](https://github.com/Ringleton/LED-Matrix-Temperature-UV-Display/assets/157074435/2a9dbf71-9bf8-4eac-a435-fb3cadde1af1)
