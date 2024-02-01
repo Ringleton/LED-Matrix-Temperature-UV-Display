@@ -39,7 +39,7 @@ Once you have established the WIFI connection, you may want to revert to using t
 # Program Configuration
 The following assumes the user has basic knowledge of navigating through the Pi’s folder structure and how to edit a text file as those are beyond the scope of this document.
 
-The display has a few user-configured options such as which Davis weather station to monitor and its operating hours.  To change the configuration, you will need to connect to the Pi using either of the methods noted above.  From the Home directory, navigate to the LED\_matrix folder.  For an existing system, in there you will find a configuration file named “config.json”.  For new installations, there is also a “config.json.sample” file that can be renamed or copied over.  The instructions for that are found further down in the Installing the Software section.
+The display has a few user-configured options such as which Davis weather station to monitor and its operating hours.  To change the configuration, you will need to connect to the Pi using either of the methods noted above.  From the Home directory, navigate to the LED\_matrix folder.  For an existing system, in there you will find a configuration file named “config.json”.  For new installations, there is also a “config.json.sample” file that can be renamed or copied over.  The instructions for that are found further down in the [Installing the Software](README.md#Installing-the-Software) section.
 
 Use a text editor to make any changes.  For example, from a terminal window and in the LED\_matrix folder, type: `sudo nano config.json`
 
@@ -164,7 +164,7 @@ Edit this file by typing:
 
 `sudo nano config.json`
 
-See the Program Configuration section above to make the necessary changes.  Once completed, press CTRL-X to exit the editor and save your changes.
+See the [Program Configuration](README.md#Program-Configuration) section above to make the necessary changes.  Once completed, press CTRL-X to exit the editor and save your changes.
 
 Before setting up the automatic start feature for the display and optional reboot/shutdown button, test the program now by manually launching it.  While you are still in the LED\_matrix folder, type:
 
@@ -239,7 +239,7 @@ To test your autostart file, reboot the Pi – you can use the pushbutton if ena
 # Adafruit IoT Monitoring
 The display includes the optional ability to upload internal statistics to an Adafruit IoT feed.  You can set up a free Adafruit account and create a feed.  You can configure the Adafruit feed to provide an email notification after a period of inactivity.  This can alert an administrator that the display is down or has lost its WIFI connection.
 
-Enter your account and feed information into the config.json file as noted above in the Program Configuration section.  The following information is sent to the feed:
+Enter your account and feed information into the config.json file as noted above in the [Program Configuration[(README.md#Program-Configuration) section.  The following information is sent to the feed:
 
 **CPU T:**	The internal CPU temperature.  The Pi will withstand temperatures up to 85 degrees Celsius.  As it gets closer to its upper limit, the system will automatically begin to throttle the processor down to try to help the CPU cool back down.
 
@@ -313,7 +313,7 @@ The weather station at Cadence uses the following Davis Instruments devices:
 - WeatherLinkIP data logger / transmitter 6555
 - WeatherLink Console 6313
 
-The data is uploaded to the Davis WeatherLink.com site and this matrix display uses the Davis API to grab that data from their servers.  See the Overview section at the beginning of this document for more information.
+The data is uploaded to the Davis WeatherLink.com site and this matrix display uses the Davis API to grab that data from their servers.  See the [Overview](README.md#Overview) section at the beginning of this document for more information.
 
 Anyone can set up a free Davis account where you can monitor weather stations from around the world.  Optionally, you can upload weather data from  your weather station and share it with others.  At the time of this writing, both a legacy 6555 WeatherLinkIP data collector and the newer Davis 6313 Console are both being employed to upload data for Cadence and are treated as two separate weather stations even though the data for each is being transmitted by a single physical station device.
 
