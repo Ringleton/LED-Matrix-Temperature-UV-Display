@@ -5,7 +5,7 @@ This display utilizes a WIFI connection to read data from a weather server.  The
 
 ![001](https://github.com/Ringleton/LED-Matrix-Temperature-UV-Display/assets/157074435/257de8e7-dc1d-4d5d-825c-b658bd5483d0)
 
-This LED matrix display is built using a Raspberry Pi Zero 2 WH, single board computer along with an Adafruit RGB matrix “bonnet” plugged into the top of the Pi.  The bonnet converts the Pi’s 3.3V output pins to 5.0V logic along with a socket to connect a cable to the input of one of the two 64 X 32 RGB LED matrix, 3mm pitch (P3) panels.
+This LED matrix display is built using a Raspberry Pi Zero 2 W, single board computer along with an Adafruit RGB matrix “bonnet” plugged into the top of the Pi.  The bonnet converts the Pi’s 3.3V output pins to 5.0V logic along with a socket to connect a cable to the input of one of the two 64 X 32 RGB LED matrix, 3mm pitch (P3) panels.
 
 The Pi’s external connectors are exposed at the rear inset of the enclosure, along with a separate power supply connection (5V, 10A) and a pushbutton that acts as either a reboot or shutdown trigger.  You can connect a video display to the Pi’s mini-HDMI connector and a mouse / keyboard dongle to the Pi’s micro-USB On-The-Go (OTG) port to interact and control the system.  Optionally, you can also use a terminal emulator connected over WIFI.  The Pi uses a Unix-based operating system.  The program itself is written in Python.
 
@@ -289,7 +289,7 @@ One side of the pushbutton is connected to ground, the other connects to GPIO pi
 |Raspberry Pi Zero 2 W|Adafruit|5291|1|
 |Break-away 0.1" 2x20-pin Strip Dual Male Header|Adafruit|2822|1|
 |Micro-SD card|||1|
-|2 X 64x32 RGB LED Matrix panels - 3mm pitch|Adafruit|2279|2|
+|64x32 RGB LED Matrix panels - 3mm pitch|Adafruit|2279|2|
 |RGB Matrix bonnet for Raspberry Pi|Adafruit|3211|1|
 |2x8 IDC ribbon cable, 12"|Adafruit|4170|1|
 |Right angle VEML7700 light sensor|Adafruit|5378|1|
