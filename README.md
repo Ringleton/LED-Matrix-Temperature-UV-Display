@@ -237,6 +237,8 @@ Exec=bash -c 'cd /home/cadence/LED_matrix && sudo /usr/bin/python /home/cadence/
 
 `Exec=bash -c 'cd /home/pi/LED_matrix && sudo /usr/bin/python /home/pi/LED_matrix/temp_display.py'`
 
+Don't forget to include the single quote at the very end of the line!
+
 Press CTRL-X to exit and save your changes.  
 
 To test your autostart file, reboot the Pi – you can use the pushbutton if enabled above – and confirm that the display automatically starts.  It may take up to a minute before you see anything in the display.
