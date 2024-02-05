@@ -102,11 +102,11 @@ You may want to pre-edit the configuration options with a default username and p
 
 After preparing the micro-SD card, insert it into the Raspberry Pi Zero 2 W.  Connect a mouse/keyboard dongle via a USB connector plugged into the Pi’s center USB port.  Connect a screen via the mini-HDMI connector of the Pi.  Plug a 5V power supply into the outside “PWR” USB connector and power it up.  Optionally, if the RGB matrix bonnet is already installed on top of the Pi, you can connect power to the 2.1mm barrel jack on the bonnet and the Pi will use its power.
 
-The Pi will prompt you for some basic information and will then reboot.  It will then begin updating it’s OS to the latest version.  This may take several minutes.  When complete, it will boot up to a desktop.
+The Pi may prompt you for some basic information and will then reboot.  It will then begin updating it’s OS to the latest version.  This may take several minutes.  When complete, it will boot up to a desktop.
 
 If not already performed during the micro-SD card configuration, enter the network configuration area, and set up your local WIFI.
 
-Click on the Raspberry icon on the menu and select:  Preferences à Raspberry Pi Configuration.
+Click on the Raspberry icon on the menu and select:  Preferences --> Raspberry Pi Configuration.
 
 Under the Interfaces tab, ensure that I2C and optionally, VNC is enabled.  Wait for the VNC icon to appear in the upper right corner.  Reboot if you had to make any changes.
 
@@ -124,9 +124,9 @@ Start a terminal window and while in the home folder, enter these commands:
 
 `sudo bash rgb-matrix.sh`
 
-As noted in their instructions, this step will take several minutes to complete.  The system will prompt you to reboot.
+When prompted, select the Adafruit RGB Matrix Bonnet and the Qualtity option.  As noted in their instructions, this step will take several minutes to complete.  The system will prompt you to reboot.
 
-As we are using a jumper to implement the “quality” option on the RGB matrix (see the learn.Adafruit.com link above), the sound card in the Pi must be disabled so as not to interfere.
+As we are using a jumper to implement the “quality” option on the RGB matrix (see the learn.Adafruit.com link above), the sound card in the Pi must be disabled so as not to interfere.  After the system has rebooted, start a terminal window again and type the following:
 
 `sudo nano /boot/config.txt`
 
@@ -201,7 +201,9 @@ Immediately above the “exit 0” line, add:
 
 `python /home/cadence/LED_matrix/restart_shutdown.py &`
 
-**NOTE: if you have prepared the Pi using a different default user other than “cadence”, replace the occurrence above with your default username.**
+**Or, if you prepared the Pi using the default "pi" username, type this instead:**
+
+`python /home/pi/LED_matrix/restart_shutdown.py &`
 
 Don’t forget the space and ampersand at the end of the line.  Press CTRL-X to exit and save the file.
 
@@ -231,7 +233,9 @@ Name=Display
 
 Exec=bash -c 'cd /home/cadence/LED_matrix && sudo /usr/bin/python /home/cadence/LED_matrix/temp_display.py'
 ```
-**NOTE: If you have prepared the Pi using a different default user other than “cadence”, replace the occurrences above with your default username.**
+**Or, if you prepared the Pi using the default "pi" username, for the last line, type this instead:**
+
+`Exec=bash -c 'cd /home/pi/LED_matrix && sudo /usr/bin/python /home/pi/LED_matrix/temp_display.py'`
 
 Press CTRL-X to exit and save your changes.  
 
