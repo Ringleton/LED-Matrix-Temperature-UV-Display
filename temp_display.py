@@ -1,10 +1,12 @@
-# January 28, 2024
-# Moved the Adafruit feed name key and locale info from this source file
-# to the config.json file
-# Fixed exception trap for no light sensor
-
 # LED matrix temperature / UV display
-# Written by Russell Ingleton 2023
+
+# February 13, 2024
+# Improved sunrise/daylight calculations
+# Option to not display UV (no sensor or just don't want it)
+# Option for Celsius or Fahrenheit
+
+# MIT License
+# Copyright (c) 2024 by Russell Ingleton
 
 # To do...
 # Finalize sensor to brightness mapping
@@ -180,8 +182,6 @@ class Config:
             exit(1)
 
         self.use_sensor = jdata["dimmer"]["use_sensor"]
-        self.daylight_offset_minutes = jdata["dimmer"]["daylight_offset_minutes"]
-
         self.max_brightness_percent = jdata["dimmer"]["max_brightness_percent"]
         if self.max_brightness_percent > 100:
             self.max_brightness_percent = 100
@@ -189,8 +189,8 @@ class Config:
         if self.min_brightness_percent < 0:
             self.min_brightness_percent = 0
 
-        self.sunrise_sunset_offset_minutes = jdata["UV"]["sunrise_sunset_offset_minutes"]
-        self.show_temp = jdata["UV"]["alternate_with_hi_lo_temp"]
+        self.show_UV = jdata["UV"]["show_UV"]
+        self.show_temp_with_UV = jdata["UV"]["alternate_with_hi_lo_temp"]
         self.hi_lo_temp_length_seconds = jdata["UV"]["hi_lo_temp_length_seconds"]
         # Main loop repeats every 60 seconds.  So the high/lo temp display must be less than that.  Let's max it at 50 seconds.
         if self.hi_lo_temp_length_seconds > 50:
@@ -204,12 +204,15 @@ class Config:
         # Longitude, latitude location.  Used to determine sunrise / sunset.
         self.my_location_lat = str(jdata["locale"]["latitude"])
         self.my_location_lon = str(jdata["locale"]["longitude"])
+        self.my_location_horizon = str(jdata["locale"]["horizon"])
 
         # This sets the max and min temperatures for what will be the most red (hot) and
         # most purple (cold) colors.  Values beyond these will stay at their max color.
         # Set appropriately for your locale
         self.really_hot = jdata["locale"]["really_hot"]
         self.really_cold = jdata["locale"]["really_cold"]
+        
+        self.use_Celsius = jdata["use_Celsius"]
 
 
 class Data:
@@ -269,7 +272,6 @@ class Data:
                 logging.warning('Light sensor not found or not connected, falling back to software mode.')
 
         # create a REST client instance for the IoT feed
-        # no error returned here even if this fails
         self.io_client = Client(self.config.adafruitIO_user, self.config.adafruitIO_key)
 
 
@@ -320,11 +322,15 @@ def get_temp(data):
                             else:
                                 data.error_count = 0
 
-                            data.temp_now = float(results['temp_c'])
-                            data.temp_high = round(
-                                (float(results['davis_current_observation']['temp_day_high_f']) - 32) * 5 / 9, 1)
-                            data.temp_low = round(
-                                (float(results['davis_current_observation']['temp_day_low_f']) - 32) * 5 / 9, 1)
+                            data.temp_now = float(results['temp_f'])
+                            data.temp_high = float(results['davis_current_observation']['temp_day_high_f'])
+                            data.temp_low = float(results['davis_current_observation']['temp_day_low_f'])
+
+                            if data.config.use_Celsius:
+                                data.temp_now = float(results['temp_c'])
+                                data.temp_high = round((data.temp_high - 32) * 5 / 9, 1)
+                                data.temp_low = round((data.temp_low - 32) * 5 / 9, 1)
+                                
                             try:
                                 data.UV = float(results['davis_current_observation']['uv_index'])
                             except ValueError:  # in case a missing UV sensor value returns "--"
@@ -481,13 +487,15 @@ def get_temp(data):
                                 #  and continue to grab the data even though it will be the same as last
 
                                 if temp is not None:
-                                    # Convert to Celsius
-                                    data.temp_now = round((float(temp) - 32) / 9 * 5, 1)
+                                    if data.config.use_Celsius:
+                                        data.temp_now = round((float(temp) - 32) / 9 * 5, 1)
+                                    else:
+                                        data.temp_now = float(temp)
                                 else:
                                     data.temp_now = None
 
                                 if uv is not None:
-                                    data.UV = (float(uv))
+                                    data.UV = float(uv)
                                 else:
                                     data.UV = None
 
@@ -606,22 +614,33 @@ def get_temp(data):
             else:
                 return (1, "Warning")
 
-def get_colour(temp, really_hot = 40, really_cold = -30):
+def get_colour(data, temp):
 
+    really_hot = data.config.really_hot
+    really_cold = data.config.really_cold
+    
     # cap out at the max temps allowed
     if temp > really_hot:
         temp = really_hot
     elif temp < really_cold:
         temp = really_cold
 
+    # Anything below freezing will be blue or purple
+    # If using that other scale, must convert to Celsius to make this work
+    if not data.config.use_Celsius:
+        temp = (temp - 32) * 5 / 9
+        really_hot = (really_hot - 32) * 5 / 9
+        really_cold = (really_cold - 32) * 5 / 9
+
     if temp >= 0:
         full_range = really_hot
-        # z = (really_hot - temp) / full_range * 190 + 20  # 20 - 210
         z = (really_hot - temp) / full_range * 210  # 0 - 210
     else:
         full_range = -really_cold
         z = (-temp) / full_range * 90 + 210  # 210 - 300
 
+    # Convert degrees (of a circle) to the RYB colour wheel
+    # RYB colour wheel provides best rainbow of colours
     r, yellow, b = colorsys.hsv_to_rgb(z / 360.0, 1.0, 1.0)
 
     R, Y, B = int(255 * r), int(255 * yellow), int(255 * b)
@@ -647,45 +666,71 @@ def get_colour_UV(UV):
         return (206, 49, 254)
 
 
-def get_sunrise_sunset(data):
+def get_sunrise_sunset(data, horizon):
     my_location = ephem.Observer()
 
     my_location.lat = data.config.my_location_lat
     my_location.lon = data.config.my_location_lon
+    my_location.horizon = horizon
 
     sun = ephem.Sun()
 
     current = ephem.now()
-    sunrise = my_location.next_rising(sun)
-    sunset = my_location.next_setting(sun)
+    
+    try:
+        sunrise = my_location.next_rising(sun)
+        sunset = my_location.next_setting(sun)
 
-    # if the next sunrise and/or sunset is now tomorrow, then we need to get the previous one (= today's)
-    # so that this function always returns today's sunrise and sunset regardless as to the current time of day
-    if ephem.localtime(sunrise).day != ephem.localtime(current).day:
-        sunrise = my_location.previous_rising(sun)
+        # if the next sunrise and/or sunset is now tomorrow, then we need to get the previous one (= today's)
+        # so that this function always returns today's sunrise and sunset regardless as to the current time of day
+        if ephem.localtime(sunrise).day != ephem.localtime(current).day:
+            sunrise = my_location.previous_rising(sun)
 
-    if ephem.localtime(sunset).day != ephem.localtime(current).day:
-        sunset = my_location.previous_setting(sun)
+        if ephem.localtime(sunset).day != ephem.localtime(current).day:
+            sunset = my_location.previous_setting(sun)
 
-    return (sunrise, sunset, current)
+        return sunrise, sunset, current
+    
+    # And just in case you are in a very high +/- latitude
+    except ephem.NeverUpError:
+        return current +1, current -1 , current
+    
+    except ephem.AlwaysUpError:
+        return current -1, current + 1, current
 
 
-def is_bright(data):
-    # Is it bright outside?  Sun may not be above the horizon but it could be dawn or dusk.
-    # Offset is the time before sunrise or after sunset when it is still considered bright outside.
+def estimate_brightness(data):
+    # How bright is it outside?  Sun may not be above the horizon but it could be dawn or dusk.
+    # Looks at nighttime, daytime and twilight hours to esimate light level.  Returns 0.0 to 1.0.
     # Used to determine display brightness if not using light sensor
 
-    sunrise, sunset, current = get_sunrise_sunset(data)
-    return (sunrise - data.config.daylight_offset_minutes * ephem.minute < current < sunset + data.config.daylight_offset_minutes * ephem.minute)
+    # Get sunrise, sunset based on our true horizon
+    sunrise, sunset, current = get_sunrise_sunset(data, data.config.my_location_horizon)
+    
+    # Civil twilight is considered to be 6.0 degrees below horizon.
+    twilight_start, twilight_end, current = get_sunrise_sunset(data, str(float(data.config.my_location_horizon) - 6.0))
+
+    # Is the sky dark?
+    if current < twilight_start or current > twilight_end:
+        return 0.0
+    
+    # Is it the middle of the day?
+    elif sunrise < current < sunset:
+        return 1.0
+    
+    # Else, we are in The Twilight Zone!
+    elif current < sunrise:
+        return 1.0 - (sunrise - current) / (sunrise - twilight_start)
+    else:
+        return 1.0 + (sunset - current) / (twilight_end - sunset)
 
 
 def is_sun_above(data):
-    # Is the sun above the horizon?  Sun may be above a flat horizon but not above our mountaintops.
-    # Offset adds / subtracts the extra minutes for our mountains.
+    # Is the sun above the horizon?
     # Used to determine when we start showing the UV value.  No point when sun not above our horizon.
 
-    sunrise, sunset, current = get_sunrise_sunset(data)
-    return (sunrise + data.config.sunrise_sunset_offset_minutes * ephem.minute < current < sunset - data.config.sunrise_sunset_offset_minutes * ephem.minute)
+    sunrise, sunset, current = get_sunrise_sunset(data, data.config.my_location_horizon)
+    return sunrise < current < sunset
 
 
 def set_brightness(data):
@@ -711,15 +756,15 @@ def set_brightness(data):
         if i == 0:
             b = percent_out[0]
         else:
-            b = int((light - light_in[i]) / (light_in[i-1] - light_in[i]) * (percent_out[i-1] - percent_out[i]) + percent_out[i])
+            b = int((light - light_in[i]) / (light_in[i-1] - light_in[i]) *
+                    (percent_out[i-1] - percent_out[i]) + percent_out[i])
 
-        data.matrix.brightness = b
+    else: # no sensor - estimate light
+        light = estimate_brightness(data)
+        b = int((data.config.max_brightness_percent - data.config.min_brightness_percent) *
+                light + data.config.min_brightness_percent)
 
-    else:
-        if is_bright(data):
-            data.matrix.brightness = data.config.max_brightness_percent
-        else:
-            data.matrix.brightness = data.config.min_brightness_percent
+    data.matrix.brightness = b
 
 
 # When after hours, clear the display but show a blinking cursor so we know that the display is still active.
@@ -771,8 +816,13 @@ def refresh_display(data):
         sTemp = ' ---'
         r = g = b = 150
     else:
-        sTemp = '%.1f' % data.temp_now
-        r, g, b = get_colour(data.temp_now, data.config.really_hot, data.config.really_cold)
+        if data.temp_now >= 100.0:
+            # Can't fit 4-digit temps on this display
+            sTemp = '%.0f' % data.temp_now
+        else:
+            sTemp = '%.1f' % data.temp_now
+            
+        r, g, b = get_colour(data, data.temp_now)
 
     temp_color = graphics.Color(r, g, b)
 
@@ -781,7 +831,7 @@ def refresh_display(data):
         r = g = b = 150
     else:
         sHi = '%.1f' % data.temp_high
-        r, g, b = get_colour(data.temp_high, data.config.really_hot, data.config.really_cold)
+        r, g, b = get_colour(data, data.temp_high)
 
     temp_high_color = graphics.Color(r, g, b)
 
@@ -790,7 +840,7 @@ def refresh_display(data):
         r = g = b = 150
     else:
         sLo = '%.1f' % data.temp_low
-        r, g, b = get_colour(data.temp_low, data.config.really_hot, data.config.really_cold)
+        r, g, b = get_colour(data, data.temp_low)
 
     temp_low_color = graphics.Color(r, g, b)
 
@@ -979,12 +1029,15 @@ def main_loop(data):
 
         if success:
             # We have good data for displaying
+            
+            if not data.config.show_UV:
+                data.show_hi_lo_temp = True
 
-            if not is_sun_above(data):
+            elif not is_sun_above(data):
                 # This sun is not high in the sky so show the high/lows
                 data.show_hi_lo_temp = True
 
-            elif data.config.show_temp:
+            elif data.config.show_temp_with_UV:
                 # Sun high in the sky (show UV) but you wanted to still show high/lows initially
                 data.show_hi_lo_temp = True
 

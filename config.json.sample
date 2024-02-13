@@ -15,12 +15,11 @@
      },
      "dimmer": {
          "use_sensor": true,
-         "daylight_offset_minutes": 20,
          "max_brightness_percent": 100,
          "min_brightness_percent": 20
      },
      "UV": {
-         "sunrise_sunset_offset_minutes": 0,
+         "show_UV": true,
          "alternate_with_hi_lo_temp": true,
          "hi_lo_temp_length_seconds": 10
      },
@@ -32,8 +31,10 @@
     "locale" : {
         "latitude": 50.1234,
         "longitude": -119.9876,
+        "horizon": 0.0,
         "really_hot": 35,
         "really_cold": -20
-     }
+     },
+     "use_Celsius": true
 }
 
