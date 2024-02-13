@@ -60,11 +60,10 @@ Property| |Description
 ||`off_time`|
 |`dimmer`||The display can adjust its brightness based on the ambient light levels as detected by an optional light sensor found on the front edge of the display.
 ||`use_sensor`| If set to `true`, the sensor is used and the remaining options in this section are ignored.  The brightness of the display is adjusted every minute based on the current ambient light level.
-||`daylight_offset_minutes`|If the sensor is not used or can’t be found, then the display calculates sunrise and sunset for this location and subtracts the value noted here from the sunrise or adds it to the sunset to estimate daylight hours.  During the daylight period, it sets the display brightness to the max setting below and outside of daylight hours, it sets the display brightness to the min setting.
-||`max_brightness_percent`|Daylight brightness setting.
-||`min_brightness_percent`|Nighttime brightness setting.
-|`UV`||When the sun is above the horizon, the UV index is shown on the right side of the display.  When the sun has set, only the day’s high and low temperatures are shown.  When the UV is shown, you can optionally alternate the UV index with the high and low temperatures.
-||`sunrise_sunset_offset_minutes`|The value here is added to the sunrise and subtracted from the sunset to estimate when the sun rises above or sets below the mountains as opposed to a flat horizon.  This is used to estimate the time during the day when sun is truly in view and thus, the UV index is shown.
+||`max_brightness_percent`|Maximum daylight brightness setting.
+||`min_brightness_percent`|Minimum nighttime brightness setting.
+|`UV`||When the sun is above the horizon, the UV index can be shown on the right side of the display.  When the sun has set, only the day’s high and low temperatures are shown.  When the UV is shown, you can optionally alternate the UV index with the high and low temperatures.
+||`show_UV`|Do you want UV displayed?  If you do not have a UV sensor or just don't want UV on this display, set this to `false`.
 ||`alternate_with_hi_lo_temp`|If set to true, during the daytime, the right side of the display alternates between the UV index and the high and low temperatures.  Otherwise, the UV index is always shown during the day.
 ||`hi_lo_temp_length_seconds`|During each 60 second period, this is the number of seconds that the high and low temperatures are shown instead of the UV index.
 |`adafruit_IO`||The following information is optional.  A free IoT account can be created at Adafruit.com.  Every 10 minutes, this display uploads information about itself, for example, internal CPU temperature, error count and current uptime.  The Adafruit IoT feed can be configured to send an email after a configured amount of inactivity thereby alerting an administrator that the display may be down or has lost WIFI connectivity.
@@ -74,8 +73,10 @@ Property| |Description
 |`locale`||Information for your locale.  Used to determine sunrise, sunset, and temperature colours.
 ||`latitude`|Enter your latitude here.
 ||`longitude`|Longitude.
+||`horizon`|On the prairies, set this to 0.0.  But if you are in a valley, you can increase this setting to best reflect when the sun truly rises and sets over your horizon.
 ||`really_hot`|Temperatures above this will be red.
 ||`really_cold`|Temperatures below this will be purple.
+|`use_Celsius`||Set to `true` for Celsius or `false` for Fahrenheit
 
 
 # Error Messages
