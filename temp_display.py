@@ -1,6 +1,6 @@
 # LED matrix temperature / UV display
 
-# February 13, 2024
+# February 14, 2024
 # Improved sunrise/daylight calculations
 # Option to not display UV (no sensor or just don't want it)
 # Option for Celsius or Fahrenheit
@@ -817,8 +817,8 @@ def refresh_display(data):
         r = g = b = 150
     else:
         if data.temp_now >= 100.0:
-            # Can't fit 4-digit temps on this display
-            sTemp = '%.0f' % data.temp_now
+            # Can't fit 4-digit temps on this display so grab 3.  Will add decimal later.
+            sTemp = '%d' % data.temp_now
         else:
             sTemp = '%.1f' % data.temp_now
             
@@ -871,21 +871,8 @@ def refresh_display(data):
 
     if data.show_hi_lo_temp:
 
-        # This will put fully left and fully right, placing all spacing in the middle...
         temp_pos = 0  # far left
         end_pos = panel_width
-
-        # Or...
-
-        # The divisor in these two lines is saying "what portion of the total available spacing do you want on the left and right sides
-        # so the balance will be in the middle.  4 = 1/4 on either side, leaving 1/2 in the center
-        # 3 = 1/3 , 1/3 leaving 1/3 in the middle.  5 = 1/5, 1/5, 3/5, etc.
-        # temp_pos = int((panel_width-lenTemp-lenMaxHiLo)/4)
-        # end_pos = panel_width - int((panel_width-lenTemp-lenMaxHiLo)/4)
-        # if temp_pos < 0:
-        #    temp_pos = 0
-        # if end_pos > panel_width:
-        #    end_pos = panel_width
 
         if lenHiLoTitle > lenMaxHiLo and int((lenHiLoTitle - lenMaxHiLo) / 2) + end_pos > panel_width:
             end_pos -= int((lenHiLoTitle - lenMaxHiLo) / 2) + end_pos - panel_width
@@ -897,6 +884,11 @@ def refresh_display(data):
 
         data.canvas.Clear()
         graphics.DrawText(data.canvas, data.font_large, temp_pos, 29, temp_color, sTemp)
+
+        # If >= 100 (Fahrenheit), it won't all fit so put decimal portion in a smaller font
+        if data.temp_now and data.temp_now >= 100.0:
+            graphics.DrawText(data.canvas, data.font_med, lenTemp-5, 29, temp_color, ('%.1f' % data.temp_now)[3:5])
+
         graphics.DrawText(data.canvas, data.font_small, HiLoTitle_pos, 6, data.title_color, sHiLoTitle)
         graphics.DrawText(data.canvas, data.font_med, Hi_pos, 19, temp_high_color, sHi)
         graphics.DrawText(data.canvas, data.font_med, Lo_pos, 31, temp_low_color, sLo)
@@ -906,17 +898,8 @@ def refresh_display(data):
 
     else:  # showing UV
 
-        # This will put fully left and fully right, placing all spacing in the middle...
         temp_pos = 0  # far left
         end_pos = panel_width
-
-        # Or as above, with divisor
-        # temp_pos = int((panel_width-lenTemp-lenUV)/4)
-        # end_pos = panel_width - int((panel_width-lenTemp-lenUV)/4)
-        # if temp_pos < 0:
-        #    temp_pos = 0
-        # if end_pos > panel_width:
-        #    end_pos = panel_width
 
         # This "if" should never occur if the title stays very short such as "UV"
         if lenUVTitle > lenUV and int((lenUVTitle - lenUV) / 2) + end_pos > panel_width:
@@ -928,6 +911,11 @@ def refresh_display(data):
 
         data.canvas.Clear()
         graphics.DrawText(data.canvas, data.font_large, temp_pos, 29, temp_color, sTemp)
+
+        # If >= 100 (Fahrenheit), it won't all fit so put decimal portion in a smaller font
+        if data.temp_now and data.temp_now >= 100.0:
+            graphics.DrawText(data.canvas, data.font_med, lenTemp-5, 29, temp_color, ('%.1f' % data.temp_now)[3:5])
+
         graphics.DrawText(data.canvas, data.font_med, UVTitle_pos, 14, data.title_color, sUVTitle)
         graphics.DrawText(data.canvas, data.font_med, UV_pos, 28, UV_color, sUV)
 
