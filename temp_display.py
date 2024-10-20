@@ -1,17 +1,7 @@
 # LED matrix temperature / UV display
 
-# February 14, 2024
-# Improved sunrise/daylight calculations
-# Option to not display UV (no sensor or just don't want it)
-# Option for Celsius or Fahrenheit
-
 # MIT License
 # Copyright (c) 2024 by Russell Ingleton
-
-# To do...
-# Finalize sensor to brightness mapping
-# Consider removal of number-key brightness controls "on_press", "listener"
-# and corresponding imports below
 
 import time
 from datetime import datetime
@@ -192,9 +182,9 @@ class Config:
         self.show_UV = jdata["UV"]["show_UV"]
         self.show_temp_with_UV = jdata["UV"]["alternate_with_hi_lo_temp"]
         self.hi_lo_temp_length_seconds = jdata["UV"]["hi_lo_temp_length_seconds"]
-        # Main loop repeats every 60 seconds.  So the high/lo temp display must be less than that.  Let's max it at 50 seconds.
-        if self.hi_lo_temp_length_seconds > 50:
-            self.hi_lo_temp_length_seconds = 50
+        # Main loop repeats every 60 seconds.  So the high/lo temp display must be less than that.  Let's max it at 55 seconds.
+        if self.hi_lo_temp_length_seconds > 55:
+            self.hi_lo_temp_length_seconds = 55
 
         # Using Adafruit IO feed to upload statistics and monitor if down.
         self.adafruitIO_user = jdata["adafruit_IO"]["user"]
@@ -246,7 +236,7 @@ class Data:
         self.font_msg.LoadFont("./fonts/7x13.bdf")
 
         # Used for text titles
-        self.title_color = graphics.Color(150, 150, 150)  # light grey
+        self.title_color = graphics.Color(255, 255, 255)  # white
 
         filename = "high-lows.data"
 
@@ -434,7 +424,6 @@ def get_temp(data):
 
                             if response.status_code == 200:
                                 results = response.json()
-                                #print(json.dumps(json.loads(response.text), indent=4))
 
                                 temp = uv = timestamp = None  # Set a default in case no valid temp or UV readings returned.
                                 try:
@@ -738,11 +727,6 @@ def set_brightness(data):
     if data.config.use_sensor and data.lux_sensor_available:
         sensor = adafruit_veml7700.VEML7700(data.i2c)
 
-        # put code here to set an equivalent brightness
-        # data.matrix.brightness = map(place values here)
-        
-        # may want to use the sensor's light setting, not lux?
-        #lux=sensor.lux
         light=sensor.light
 
         # map sensor brightness levels to matrix brightness percentage equivalent
@@ -773,6 +757,8 @@ class Blink_pixel:
     def __init__(self, data):
         self.data = data
         self.on = False
+        
+        self.data.canvas.Clear()
 
     def blink(self):
 
@@ -787,10 +773,6 @@ class Blink_pixel:
         if self.data.after_hours == True:
             # closed hours
 
-            # we will clear the matrix here just in case we switched to non-closed and already displayed
-            # the day's first temperature within the previous one second.  Unlikely, but possible.
-            self.data.canvas.Clear()
-
             h = self.data.matrix.height
             w = self.data.matrix.width
 
@@ -798,7 +780,7 @@ class Blink_pixel:
             graphics.DrawLine(self.data.canvas, w - 2, h - 2, w - 1, h - 2, graphics.Color(x, x, x))
             graphics.DrawLine(self.data.canvas, w - 2, h - 1, w - 1, h - 1, graphics.Color(x, x, x))
 
-            self.data.canvas = self.data.matrix.SwapOnVSync(self.data.canvas)
+            self.data.matrix.SwapOnVSync(self.data.canvas)
 
             # Fire this method again in one second to toggle the cursor
             self.data.timer_blink = threading.Timer(1, self.blink)
@@ -814,7 +796,7 @@ def refresh_display(data):
 
     if data.temp_now is None:
         sTemp = ' ---'
-        r = g = b = 150
+        r = g = b = 255
     else:
         if data.temp_now >= 100.0:
             # Can't fit 4-digit temps on this display so grab 3.  Will add decimal later.
@@ -828,7 +810,7 @@ def refresh_display(data):
 
     if data.temp_high == -999:
         sHi = '---'
-        r = g = b = 150
+        r = g = b = 255
     else:
         sHi = '%.1f' % data.temp_high
         r, g, b = get_colour(data, data.temp_high)
@@ -837,7 +819,7 @@ def refresh_display(data):
 
     if data.temp_low == 999:
         sLo = '---'
-        r = g = b = 150
+        r = g = b = 255
     else:
         sLo = '%.1f' % data.temp_low
         r, g, b = get_colour(data, data.temp_low)
@@ -846,7 +828,7 @@ def refresh_display(data):
 
     if data.UV is None:
         sUV = '---'
-        r = g = b = 150
+        r = g = b = 255
     else:
         sUV = '%.1f' % data.UV
         r, g, b = get_colour_UV(data.UV)
@@ -866,13 +848,18 @@ def refresh_display(data):
     lenMaxHiLo = max(lenHi, lenLo)
     panel_width = data.canvas.width
 
-    # Now knowing the lengths in pixels, determine the starting pixel positions for each string
+    data.canvas.Clear()
+    graphics.DrawText(data.canvas, data.font_large, 0, 29, temp_color, sTemp)
+
+    # If >= 100 (Fahrenheit), it won't all fit so put decimal portion in a smaller font
+    if data.temp_now and data.temp_now >= 100.0:
+        graphics.DrawText(data.canvas, data.font_med, lenTemp-5, 29, temp_color, ('%.1f' % data.temp_now)[3:5])
+
+    # Knowing the lengths in pixels, determine the starting pixel positions for each string
     # The display is split into two halves; current temperature always on the left and hi/lo Temps / UV on the right
+    end_pos = panel_width
 
     if data.show_hi_lo_temp:
-
-        temp_pos = 0  # far left
-        end_pos = panel_width
 
         if lenHiLoTitle > lenMaxHiLo and int((lenHiLoTitle - lenMaxHiLo) / 2) + end_pos > panel_width:
             end_pos -= int((lenHiLoTitle - lenMaxHiLo) / 2) + end_pos - panel_width
@@ -882,24 +869,11 @@ def refresh_display(data):
         Hi_pos = end_pos - lenHi
         Lo_pos = end_pos - lenLo
 
-        data.canvas.Clear()
-        graphics.DrawText(data.canvas, data.font_large, temp_pos, 29, temp_color, sTemp)
-
-        # If >= 100 (Fahrenheit), it won't all fit so put decimal portion in a smaller font
-        if data.temp_now and data.temp_now >= 100.0:
-            graphics.DrawText(data.canvas, data.font_med, lenTemp-5, 29, temp_color, ('%.1f' % data.temp_now)[3:5])
-
         graphics.DrawText(data.canvas, data.font_small, HiLoTitle_pos, 6, data.title_color, sHiLoTitle)
         graphics.DrawText(data.canvas, data.font_med, Hi_pos, 19, temp_high_color, sHi)
         graphics.DrawText(data.canvas, data.font_med, Lo_pos, 31, temp_low_color, sLo)
 
-        data.canvas = data.matrix.SwapOnVSync(data.canvas)
-
-
     else:  # showing UV
-
-        temp_pos = 0  # far left
-        end_pos = panel_width
 
         # This "if" should never occur if the title stays very short such as "UV"
         if lenUVTitle > lenUV and int((lenUVTitle - lenUV) / 2) + end_pos > panel_width:
@@ -909,17 +883,10 @@ def refresh_display(data):
         UVTitle_pos = end_pos - (lenUV - lenUVTitle) / 2 - lenUVTitle
         UV_pos = end_pos - lenUV
 
-        data.canvas.Clear()
-        graphics.DrawText(data.canvas, data.font_large, temp_pos, 29, temp_color, sTemp)
-
-        # If >= 100 (Fahrenheit), it won't all fit so put decimal portion in a smaller font
-        if data.temp_now and data.temp_now >= 100.0:
-            graphics.DrawText(data.canvas, data.font_med, lenTemp-5, 29, temp_color, ('%.1f' % data.temp_now)[3:5])
-
         graphics.DrawText(data.canvas, data.font_med, UVTitle_pos, 14, data.title_color, sUVTitle)
         graphics.DrawText(data.canvas, data.font_med, UV_pos, 28, UV_color, sUV)
 
-        data.canvas = data.matrix.SwapOnVSync(data.canvas)
+    data.matrix.SwapOnVSync(data.canvas)
 
 
 def error_display(data, text):
@@ -940,7 +907,7 @@ def error_display(data, text):
     for i in range(len(line)):
         graphics.DrawText(data.canvas, data.font_msg, 0, i * 11 + 9, data.title_color, line[i])
 
-    data.canvas = data.matrix.SwapOnVSync(data.canvas)
+    data.matrix.SwapOnVSync(data.canvas)
 
 # testing
 # press 0-9 to set 100%, 10 - 90% brightness
