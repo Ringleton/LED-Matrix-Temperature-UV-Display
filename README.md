@@ -73,7 +73,7 @@ Property| |Description
 |`locale`||Information for your locale.  Used to determine sunrise, sunset, and temperature colours.
 ||`latitude`|Enter your latitude here.
 ||`longitude`|Longitude.
-||`horizon`|On the prairies, set this to 0.0.  But if you are in a valley, you can increase this setting to best reflect when the sun truly rises and sets over your horizon.
+||`horizon`|On the prairies, set this to 0.0 (degrees).  But if you are in a valley, you can increase this setting to best reflect the number of degrees to your horizon in order to get a more accurate sunrise and sunset for your locale.
 ||`really_hot`|Temperatures above this will be red.
 ||`really_cold`|Temperatures below this will be purple.
 |`use_Celsius`||Set to `true` for Celsius or `false` for Fahrenheit
@@ -270,7 +270,9 @@ This project is published on github.com.  Included in the source code is a folde
 
 The enclosure was printed using ABS print filament which provides UV protection.  There are a total of 15 mounting holes used for the 3 back panels.  Those holes are designed to accept M3 X 3mm brass heat-set inserts.  The main enclosure is available in a full print size but there are also separate left and right files in case your 3D printer cannot support the full size.
 
-The optional VEML7700 light sensor and restart / shutdown pushbutton are connected to the Pi via the RGB bonnet – see photos below.
+For outdoor use, the panel's interior temperature can increase significantly, especially when in direct sunlight.  To protect the CPU from overheating, there are corresponding 3D files that include ventilation panels and a fan insert.  These panels include a slot to insert a screen mesh to prevent bugs and other debris from getting inside.  When operating, the intake ventilation panel should be occasionally cleaned to remove accumlating debris.  The fan will need to be connected to the ground / 5V supply.
+
+The optional VEML7700 light sensor and restart / shutdown pushbutton are connected to the Pi via the RGB bonnet – see photos below.  A light tunnel to the sensor is created by inserting a short length of 1/8" acrylic rod into the hole on the left side of the enclosure.
 
 One side of the pushbutton is connected to ground, the other connects to GPIO pin 19.  The light sensor connects to a 3 X 2 header on the bonnet.  Looking from the top of the bonnet with the connector towards the right:
 
@@ -306,6 +308,8 @@ One side of the pushbutton is connected to ground, the other connects to GPIO pi
 |2\.1mm power plug with cable|DigiKey|839-1246-ND|1|
 |Connector jack panel mount 5.5x2.1mm|DigiKey|839-1580-ND|1|
 |Pushbutton switch SPST-NO 3A|DigiKey|EG1900-ND|1|
+|*Optional* Axial fan 30 X 8mm 5VDC|DigiKey|1528-1904-ND|1|
+|*Optional* Pi4 heat sink set (use the lowest profile heat sink)|DigiKey||1|
 |3D-printed enclosure|||1|
 |M2.5 & M3.0 nuts/bolts/spacers|||1|
 |M3 X 3mm heat set inserts|Adafruit|4256|15|
