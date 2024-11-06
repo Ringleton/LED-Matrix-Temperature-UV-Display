@@ -1036,6 +1036,13 @@ def main_loop(data):
             # receive the email notification after one hour
             # First exception above captures Connection error timeouts
             # and second exception captures a bad API key
+            
+        except Exception as err:
+            # Catch anything else here
+            data.master_error_count += 1
+            logging.error('Total error count: %d.\n'
+                              '                     An unhandled exception occurred: %s',
+                              data.master_error_count, err)
 
     # Fire this main loop again in 60 seconds
     data.timer_main = threading.Timer(60, main_loop, [data])
