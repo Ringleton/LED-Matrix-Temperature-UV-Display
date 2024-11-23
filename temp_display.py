@@ -323,7 +323,10 @@ def get_temp(data):
                                 
                             try:
                                 data.UV = float(results['davis_current_observation']['uv_index'])
-                            except ValueError:  # in case a missing UV sensor value returns "--"
+                                
+                            # Ignore error if UV sensor fails.  Temperature will still display.
+                            # User should see senosr is missing in local console.
+                            except (ValueError, KeyError):
                                 data.UV = None
 
                             return (1, "Success")
@@ -445,9 +448,14 @@ def get_temp(data):
                                                     timestamp = int(results['sensors'][i]['data'][0][keys[2]])
 
                                             if uv is None:
-                                                uv = results['sensors'][i]['data'][0][keys[1]]
-                                                if uv is not None and timestamp is None:
-                                                    timestamp = int(results['sensors'][i]['data'][0][keys[2]])
+                                                try:
+                                                    uv = results['sensors'][i]['data'][0][keys[1]]
+                                                    if uv is not None and timestamp is None:
+                                                        timestamp = int(results['sensors'][i]['data'][0][keys[2]])
+                                                # Ignore error if UV sensor fails.  Temperature will still display.
+                                                # User should see senosr is missing in local console.
+                                                except (ValueError, KeyError):
+                                                    pass
 
                                         i += 1  # next sensor
                                 except IndexError:  # end of sensor loop
