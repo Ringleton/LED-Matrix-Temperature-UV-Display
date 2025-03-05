@@ -1,7 +1,7 @@
 # LED matrix temperature / UV display
 
 # MIT License
-# Copyright (c) 2024 by Russell Ingleton
+# Copyright (c) 2025 by Russell Ingleton
 
 import time
 from datetime import datetime
@@ -249,6 +249,7 @@ class Data:
             self.hi_low_date = datetime.now().timetuple().tm_yday - 1
             self.temp_high = self.temp_low = None
 
+        self.light = None
         self.lux_sensor_available = False 
         if self.config.use_sensor:
             try:
@@ -275,6 +276,9 @@ def get_temp(data):
 
         try:
             response = requests.get(DAVIS_V1_API_URL)
+            
+            # Force close to free resources / stop slow memory leak
+            response.close()
 
             if response.status_code == 200:
                 if response.text == 'Invalid Request!':
@@ -291,6 +295,12 @@ def get_temp(data):
                 else:  # We have a valid V1 response request
                     try:
                         results = response.json()
+                        
+                        # Set defaults in case no valid temp or UV readings returned.
+                        data.temp_now = data.UV = None
+                        data.temp_high = -999
+                        data.temp_low = 999
+                        
                         try:
                             age = int(results['davis_current_observation']['observation_age'])
                             if age > (5 * 60):  # if data is older than 5 minutes
@@ -311,28 +321,39 @@ def get_temp(data):
                             # if not an age issue, then reset our consecutive error count back to zero.
                             else:
                                 data.error_count = 0
-
-                            data.temp_now = float(results['temp_f'])
-                            data.temp_high = float(results['davis_current_observation']['temp_day_high_f'])
-                            data.temp_low = float(results['davis_current_observation']['temp_day_low_f'])
-
-                            if data.config.use_Celsius:
-                                data.temp_now = float(results['temp_c'])
-                                data.temp_high = round((data.temp_high - 32) * 5 / 9, 1)
-                                data.temp_low = round((data.temp_low - 32) * 5 / 9, 1)
                                 
+                            # Get current temp
+                            try:
+                                if data.config.use_Celsius:
+                                    data.temp_now = float(results['temp_c'])
+                                else:
+                                    data.temp_now = float(results['temp_f'])
+                                    
+                            # Key could be missing if battery on main station is dead
+                            # If so, continue without error.  Value will be displayed as "---"
+                            except KeyError:
+                                pass
+
+                            try:
+                                data.temp_high = float(results['davis_current_observation']['temp_day_high_f'])
+                                data.temp_low = float(results['davis_current_observation']['temp_day_low_f'])
+
+                                if data.config.use_Celsius:
+                                    data.temp_high = round((data.temp_high - 32) * 5 / 9, 1)
+                                    data.temp_low = round((data.temp_low - 32) * 5 / 9, 1)
+
+                            except KeyError:
+                                pass
+
                             try:
                                 data.UV = float(results['davis_current_observation']['uv_index'])
                                 
-                            # Ignore error if UV sensor fails.  Temperature will still display.
-                            # User should see senosr is missing in local console.
-                            except (ValueError, KeyError):
-                                data.UV = None
+                            except KeyError:
+                                pass
 
                             return (1, "Success")
 
                         except KeyError as err:
-                            # This happens on my indoor display so we will assume it is only transient.
                             data.error_count += 1
                             data.master_error_count += 1
                             logging.error('Consecutive error count: %d.  Total error count: %d.\n'
@@ -395,6 +416,7 @@ def get_temp(data):
                 url=DAVIS_V2_API_URL,
                 verify=True,
             )
+            response.close()
             
             if response.status_code == 200:
                 try:
@@ -424,6 +446,7 @@ def get_temp(data):
                                 url=DAVIS_V2_API_URL,
                                 verify=True,
                             )
+                            response.close()
 
                             if response.status_code == 200:
                                 results = response.json()
@@ -442,10 +465,15 @@ def get_temp(data):
 
                                         if keys:
                                             if temp is None:
-                                                temp = results['sensors'][i]['data'][0][keys[0]]
-                                                if temp is not None:
-                                                    # Get the timestamp belonging to this sensor that we grabbed temperature from.
-                                                    timestamp = int(results['sensors'][i]['data'][0][keys[2]])
+                                                try:
+                                                    temp = results['sensors'][i]['data'][0][keys[0]]
+                                                    if temp is not None:
+                                                        # Get the timestamp belonging to this sensor that we grabbed temperature from.
+                                                        timestamp = int(results['sensors'][i]['data'][0][keys[2]])
+                                                # Ignore error if temp sensor fails.  UV will still display.
+                                                # User should see sensor is missing in local console.
+                                                except KeyError:
+                                                    pass
 
                                             if uv is None:
                                                 try:
@@ -453,8 +481,8 @@ def get_temp(data):
                                                     if uv is not None and timestamp is None:
                                                         timestamp = int(results['sensors'][i]['data'][0][keys[2]])
                                                 # Ignore error if UV sensor fails.  Temperature will still display.
-                                                # User should see senosr is missing in local console.
-                                                except (ValueError, KeyError):
+                                                # User should see sensor is missing in local console.
+                                                except KeyError:
                                                     pass
 
                                         i += 1  # next sensor
@@ -548,7 +576,6 @@ def get_temp(data):
                             return (0, "Possible invalid Weatherlink station name")
 
                     except KeyError as err:
-                        # This happens on my indoor display, so we will assume it is only transient.
                         data.error_count += 1
                         data.master_error_count += 1
                         logging.error('Consecutive error count: %d.  Total error count: %d.\n'
@@ -733,28 +760,35 @@ def is_sun_above(data):
 def set_brightness(data):
 
     if data.config.use_sensor and data.lux_sensor_available:
-        sensor = adafruit_veml7700.VEML7700(data.i2c)
+        try:
+            sensor = adafruit_veml7700.VEML7700(data.i2c)
 
-        light=sensor.light
+            data.light=sensor.light
 
-        # map sensor brightness levels to matrix brightness percentage equivalent
-        light_in =   [2000, 500, 200, 50,  0]
-        percent_out = [100,  60,  40, 30, 20]
+            # map sensor brightness levels to matrix brightness percentage equivalent
+            light_in =   [2000, 500, 200, 50,  0]
+            percent_out = [100,  60,  40, 30, 20]
 
-        for i, level in enumerate(light_in):
-            if light >= level:
-                break
+            for i, level in enumerate(light_in):
+                if data.light >= level:
+                    break
 
-        if i == 0:
-            b = percent_out[0]
-        else:
-            b = int((light - light_in[i]) / (light_in[i-1] - light_in[i]) *
-                    (percent_out[i-1] - percent_out[i]) + percent_out[i])
+            if i == 0:
+                b = percent_out[0]
+            else:
+                b = int((data.light - light_in[i]) / (light_in[i-1] - light_in[i]) *
+                        (percent_out[i-1] - percent_out[i]) + percent_out[i])
+        except:
+            logging.warning('Light sensor lost.  Falling back to software mode.')
+            data.lux_sensor_available = False 
 
-    else: # no sensor - estimate light
-        light = estimate_brightness(data)
+
+    if not data.config.use_sensor or not data.lux_sensor_available: # no sensor - estimate light
+        data.light = estimate_brightness(data)
         b = int((data.config.max_brightness_percent - data.config.min_brightness_percent) *
-                light + data.config.min_brightness_percent)
+                data.light + data.config.min_brightness_percent)
+        
+        data.light *= 100  # For display purposes only
 
     data.matrix.brightness = b
 
@@ -919,7 +953,7 @@ def error_display(data, text):
 
 # testing
 # press 0-9 to set 100%, 10 - 90% brightness
-# press space to have above confirmed, along with current lux setting.
+# press space to have above confirmed, along with current light setting.
 def on_key_press(data, key):
     
     try:
@@ -935,24 +969,17 @@ def on_key_press(data, key):
         if key.space:
             # Create a string of status info
             
-            # Up: ###  Mem U%:##
+            # Up:### Mem Use:##%
             # CPU T:##.# Err:###
-            # S:### L:#### B:###  or B:##k
-            if data.config.use_sensor and data.lux_sensor_available:
-                sensor = adafruit_veml7700.VEML7700(data.i2c)
-                lux = sensor.lux
-                light = sensor.light
-            else:
-                lux = -1
-                light = -1
-
-            message="Up: %3d Mem Use %2d" % ((datetime.now()-data.start_time).days, psutil.virtual_memory().percent)
+            # Lt:### Bright:###%
+            message="Up:%3d Mem Use:%2d%%" % ((datetime.now()-data.start_time).days, psutil.virtual_memory().percent)
             message += " CPU T:%4.1f Err:%3d" % (CPUTemperature().temperature, data.master_error_count )
-            message += " S:%3d L:%4d B:" % (data.matrix.brightness, lux)
-            if light > 999:
-                message += "%2dk" % int(light/1000)
+            message += " Lt:"
+            if data.light > 999:
+                message += "%2dk" % int(data.light/1000)
             else:
-                message += "%3d" % light
+                message += "%3d" % data.light
+            message += " Bright:%3d%%" % data.matrix.brightness
             
             error_display(data, message)
 
@@ -1020,21 +1047,15 @@ def main_loop(data):
     # If enabled, an email notification is sent if nothing received after one hour.
     if datetime.now().minute % 10 == 0:
         try:
-            if data.config.use_sensor and data.lux_sensor_available:
-                sensor = adafruit_veml7700.VEML7700(data.i2c)
-                lux = sensor.lux
-                light = sensor.light
-            else:
-                lux = -1
-                light = -1
-
+            #  CPU T:61.3 Err:123 Up:123 Mem Use:45% Light:30k Brightness:100%
             message = "CPU T:%4.1f Err:%3d" % (CPUTemperature().temperature, data.master_error_count )
-            message += " Up: %3d Mem Use %2d" % ((datetime.now()-data.start_time).days, psutil.virtual_memory().percent)
-            message += " Set to:%3d Lux:%4d Light:" % (data.matrix.brightness, lux)
-            if light > 999:
-                message += "%2dk" % int(light/1000)
+            message += " Up:%3d Mem Use:%2d%%" % ((datetime.now()-data.start_time).days, psutil.virtual_memory().percent)
+            message += " Light:"
+            if data.light > 999:
+                message += "%2dk" % int(data.light/1000)
             else:
-                message += "%3d" % light
+                message += "%3d" % data.light
+            message += " Brightness:%3d%%" % data.matrix.brightness
 
             data.io_client.send(data.config.adafruitIO_feed, message)
             
@@ -1048,9 +1069,8 @@ def main_loop(data):
         except Exception as err:
             # Catch anything else here
             data.master_error_count += 1
-            logging.error('Total error count: %d.\n'
-                              '                     An unhandled exception occurred: %s',
-                              data.master_error_count, err)
+            logging.error(f'Total error count: {data.master_error_count}.\n'
+                f'                     An unhandled exception occurred. {type(err).__name__}: {err}')
 
     # Fire this main loop again in 60 seconds
     data.timer_main = threading.Timer(60, main_loop, [data])
