@@ -82,9 +82,9 @@ Property| |Description
 # Error Messages
 If the display encounters any issues with either connectivity or the retrieved data, depending on the issue, it will attempt to automatically recover.  During the recovery period, it may display an error message.
 
-**Network connection error.  Check WiFi.  Will retry...:** The display has lost its WIFI connection.  Check the local WIFI devices.  Did someone change the network’s password?  Once reestablished, the display will take up to one minute to automatically refresh.   Should you need to connect to a new WIFI network, you will need to manually connect to the Pi using the HDMI and USB connections on the rear of the display and select the new WIFI network.  See “Connecting to the Pi” above.
+**Network connection error.  Check WiFi.  Will retry...:** The display has lost its WIFI connection.  Check the local WIFI devices.  If WIFI is present but the error does not clear, you may need to restart the display using the optional button located on the rear of the enclosure.  Once WIFI is reestablished, the display will take up to one minute to automatically refresh.   Should you need to connect to a new WIFI network, you will need to manually connect to the Pi using the HDMI and USB connections on the rear of the display and select the new WIFI network.  See [Connecting to the Pi](README.md#Connecting-to-the-Pi) above.
 
-**Outdated data.  Check local transmitter device**: Connectivity between this display and the Davis weather server still exists but the data being returned is more than a few minutes old.  This will also be reflected in the summary web page.  This is most likely due to the local WeatherLinkIP device or the 6313 Console either being powered off or having lost their connection to their local WIFI network.  Check that device and its WIFI network.  As soon as current data is uploaded again, the display will automatically refresh.
+**Outdated data.  Check local transmitter device**: Connectivity between this display and the Davis weather server still exists but the data being returned is more than a few minutes old.  This will also be reflected in the Davis summary web page.  This is most likely due to the local WeatherLinkIP device or the 6313 Console either being powered off or having lost their connection to their local WIFI network.  Check that device and its WIFI network - you do not need to make any changes with the display.  As soon as current data is uploaded again, the display will automatically refresh.
 
 **Network HTTP error: ###:** This could be a server issue.  There is likely nothing you can do to correct this.  The display should recover automatically once the issue is corrected.
 
@@ -107,7 +107,7 @@ The Pi may prompt you for some basic information and will then reboot.  It will 
 
 If not already performed during the micro-SD card configuration, enter the network configuration area, and set up your local WIFI.
 
-Click on the Raspberry icon on the menu and select:  Preferences --> Raspberry Pi Configuration.
+Click on the Raspberry icon on the desktop and select:  Preferences --> Raspberry Pi Configuration.
 
 Under the Interfaces tab, ensure that I2C and optionally, VNC is enabled.  Wait for the VNC icon to appear in the upper right corner.  Reboot if you had to make any changes.
 
@@ -244,7 +244,7 @@ Press CTRL-X to exit and save your changes.
 
 To test your autostart file, reboot the Pi – you can use the pushbutton if enabled above – and confirm that the display automatically starts.  It may take up to a minute before you see anything in the display.
 # Adafruit IoT Monitoring
-The display includes the optional ability to upload internal statistics to an Adafruit IoT feed.  You can set up a free Adafruit account and create a feed.  You can configure the Adafruit feed to provide an email notification after a period of inactivity.  This can alert an administrator that the display is down or has lost its WIFI connection.
+The display includes the optional ability to upload internal statistics to an Adafruit IoT feed.  You can set up a free Adafruit account and create a feed.  You can configure the Adafruit feed to provide an email notification after a period of inactivity or when the CPU temperature is exceeded.  This can alert an administrator that the display is down, has lost its WIFI connection or running hot - possible blocked vents or defective fan.
 
 Enter your account and feed information into the config.json file as noted above in the [Program Configuration](README.md#Program-Configuration) section.  The following information is sent to the feed:
 
@@ -256,11 +256,9 @@ Enter your account and feed information into the config.json file as noted above
 
 **Mem Use:**  The total percentage of used memory.
 
-**Set to:**  The display brightness percentage level.  Based on either the optional light sensor or the configuration settings with the time of day.
+**Light:**  The light level from the sensor or -1 if not found.
 
-**Lux:**  The lux value from the sensor or -1 if not found.
-
-**Light:**  The light level from the sensor.
+**Brightness:**  The display brightness percentage level.  Based on either the optional light sensor or the configuration settings with the time of day.
 
 Note: If you are connected to the Pi while the display program is running, pressing the Space Bar will temporarily show the statistics above on the display.
 # 3D Files and Display Assembly
@@ -270,16 +268,23 @@ This project is published on github.com.  Included in the source code is a folde
 
 The enclosure was printed using ABS print filament which provides UV protection.  There are a total of 15 mounting holes used for the 3 back panels.  Those holes are designed to accept M3 X 3mm brass heat-set inserts.  The main enclosure is available in a full print size but there are also separate left and right files in case your 3D printer cannot support the full size.
 
-For outdoor use, the panel's interior temperature can increase significantly, especially when in direct sunlight.  To protect the CPU from overheating, there are corresponding 3D files that include ventilation panels and a fan insert.  These panels include a slot to insert a screen mesh to prevent bugs and other debris from getting inside.  When operating, the intake ventilation panel should be occasionally cleaned to remove accumlating debris.  The fan will need to be connected to the ground / 5V supply.
+There are corresponding 3D files both with and without ventilation panels and a fan insert.  For outdoor use, it is strongly recommended to use the enclosure with ventilation panels along with the optional fan.  These ventilation panels include an internal slot to insert a screen mesh to prevent bugs and other debris from getting inside.  These ventilation panels may need to be occasionally cleaned to remove accumulating debris.
 
-The optional VEML7700 light sensor and restart / shutdown pushbutton are connected to the Pi via the RGB bonnet – see photos below.  A light tunnel to the sensor is created by inserting a short length of 1/8" acrylic rod into the hole on the left side of the enclosure.
+# Optional Light Sensor, Shutdown Button, and Fan
+The optional VEML7700 light sensor and restart / shutdown pushbutton are connected to a header on the RGB bonnet – see photos below.  These connect to a 3 X 2 header that is connected to the bonnet's six breakout holes located immediately beside the power jack.  A light tunnel from the front of the display to the sensor is created by inserting a short length of 1/8" acrylic rod into the hole on the left side of the enclosure.
 
-One side of the pushbutton is connected to ground, the other connects to GPIO pin 19.  The light sensor connects to a 3 X 2 header on the bonnet.  Looking from the top of the bonnet with the connector towards the right:
+The restart / shutdown button has one side of the pushbutton connected to ground while the other side connects to GPIO 19 (pin 35) on the Pi itself.
+
+For outdoor use, the panel's interior temperature can increase significantly, especially when in direct sunlight.  To protect the CPU from overheating, it is recommended to use the enclosure with ventilation panel and install a fan into the fan insert.  The fan can be connected directly to the ground / 5V supply causing it to operate 24/7.  
+
+Optionally, you can install a fan switch controller and have the fan only operate when the internal CPU temperature reaches a specified level.  This will increase fan life and decrease the debris build-up on the vents.  I used a fan controller made by "8086 Consultancy".  An extra ground line is connected to the controller along with 5V and GPIO 14 via the unused connections on the 3 X 2 header on the bonnet.  The fan is then plugged into the output of the controller.  To enable the fan action, click on the Raspberry icon on the desktop menu and select: Preferences --> Raspberry Pi Configuration --> Performance and then enable the fan, set the Fan GPIO to 14 and the "on" temperature.  I used a setting of 69 so that any CPU temperatures at or above 70 will trigger an email alert.
+
+Looking from the top of the bonnet with the connector towards the right:
 
 ||<p></p><p></p>|<p></p><p></p>||
 | :- | :- | :- | :- |
-|Top Row|<p>Black</p><p>Ground</p>|<p>Red</p><p>3\.3V</p>|Not used|
-|Bottom Row|Not used|<p>Yellow</p><p>SCL</p>|<p>Blue</p><p>SCA</p>|
+|Top Row|<p>Black VEML7700</p><p>Ground</p>|<p>Red VEML7700</p><p>3\.3V</p>|<p>*Optional 5V to fan</p><p>or to fan controller</p>|
+|Bottom Row|<p>*Optional fan enable</p><p>to fan controller input</p>|<p>Yellow VEML7700</p><p>SCL</p>|<p>Blue VEML7700</p><p>SDA</p>|
 
 
 ![002](https://github.com/Ringleton/LED-Matrix-Temperature-UV-Display/assets/157074435/2a9dbf71-9bf8-4eac-a435-fb3cadde1af1)
@@ -309,6 +314,7 @@ One side of the pushbutton is connected to ground, the other connects to GPIO pi
 |Connector jack panel mount 5.5x2.1mm|DigiKey|839-1580-ND|1|
 |Pushbutton switch SPST-NO 3A|DigiKey|EG1900-ND|1|
 |*Optional* Axial fan 30 X 8mm 5VDC|DigiKey|1528-1904-ND|1|
+|*Optional* Fan controller|PiShop.ca|1915|1|
 |*Optional* Pi4 heat sink set (use the lowest profile heat sink)|DigiKey||1|
 |3D-printed enclosure|||1|
 |M2.5 & M3.0 nuts/bolts/spacers|||1|
@@ -339,3 +345,4 @@ Weather station data from around the world is uploaded to the Davis server.  You
 When logged into your Davis account on the weatherlink.com website, you can also let someone see your weather station data via various URL’s without them needing to sign up for a Davis account.  You can access these URL’s via the “Share and Uploads” button under your account.  At the time of writing, one of those URL’s for the weather station data being sent by the console at Cadence is: <https://www.weatherlink.com/embeddablePage/show/17a85d105372405483298eef95e886b6/summary>
 
 If later, a new Davis account is created and the physical weather station devices are moved over to that account, the URL links will likely also change.
+
