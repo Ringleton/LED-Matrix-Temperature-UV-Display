@@ -21,6 +21,7 @@ import busio
 import ephem
 import textwrap
 import logging
+import shutil
 
 # All of these are for various testing
 import pynput
@@ -400,6 +401,11 @@ def get_temp(data):
                           data.error_count, data.master_error_count, err)
 
             if data.error_count > 5:
+                # In case dead wifi due to Pi, will try restarting it...
+                os.system("sudo ip link set wlan0 down")
+                time.sleep(2)
+                os.system("sudo ip link set wlan0 up")
+                
                 return (0, f"Network connection error.  Check WiFi Will retry...")
             else:
                 return (1, "Warning")
@@ -634,6 +640,11 @@ def get_temp(data):
                           data.error_count, data.master_error_count, err)
 
             if data.error_count > 5:
+                # In case dead wifi due to Pi, will try restarting it...
+                os.system("sudo ip link set wlan0 down")
+                time.sleep(2)
+                os.system("sudo ip link set wlan0 up")
+                
                 return (0, f"Network connection error.  Check WiFi Will retry...")
             else:
                 return (1, "Warning")
@@ -1079,12 +1090,19 @@ def main_loop(data):
 
 def run():
 
+    # Create up to 2 backups of logfiles if they exist
+    filename = 'logfile.'
+    if os.path.exists(filename+'1'):
+        shutil.copy2(filename+'1', filename+'2')
+    if os.path.exists(filename+'log'):
+        shutil.copy2(filename+'log', filename+'1')
+        
     # Set up logging to write to both a file and to the console
     logFormatter = logging.Formatter('%(asctime)s %(levelname)s Line:%(lineno)4d %(message)s', datefmt='%Y-%m-%d, %H:%M:%S')
     rootLogger = logging.getLogger()
     rootLogger.setLevel(logging.INFO)
 
-    fileHandler = logging.FileHandler("logfile.log", "w")
+    fileHandler = logging.FileHandler(filename+'log', "w")
     fileHandler.setFormatter(logFormatter)
     rootLogger.addHandler(fileHandler)
 
