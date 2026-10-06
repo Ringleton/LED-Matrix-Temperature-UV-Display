@@ -1,9 +1,9 @@
 # LED matrix temperature / UV display
 
 # MIT License
-# Copyright (c) 2025 by Russell Ingleton
+# Copyright (c) 2026 by Russell Ingleton
 
-import time
+from time import sleep
 from datetime import datetime
 import os
 import sys
@@ -22,6 +22,7 @@ import ephem
 import textwrap
 import logging
 import shutil
+import subprocess
 
 # All of these are for various testing
 import pynput
@@ -257,7 +258,7 @@ class Data:
                 self.i2c = board.I2C()
 
                 # Grab first reading to ensure sensor is available
-                sensor = adafruit_veml7700.VEML7700(self.i2c)
+                self.sensor = adafruit_veml7700.VEML7700(self.i2c)
                 self.lux_sensor_available = True
 
             except:
@@ -265,6 +266,8 @@ class Data:
 
         # create a REST client instance for the IoT feed
         self.io_client = Client(self.config.adafruitIO_user, self.config.adafruitIO_key)
+        
+        self.cputemp=CPUTemperature
 
 
 # This function will get all temperature values and store for use
@@ -276,83 +279,309 @@ def get_temp(data):
         DAVIS_V1_API_URL = DAVIS_V1_API_BASE + data.config.davis_user + "&pass=" + data.config.davis_password
 
         try:
-            response = requests.get(DAVIS_V1_API_URL)
-            
-            # Force close to free resources / stop slow memory leak
-            response.close()
+            with requests.get(DAVIS_V1_API_URL, timeout=10) as response:
 
-            if response.status_code == 200:
-                if response.text == 'Invalid Request!':
-                    data.error_count += 1
-                    data.master_error_count += 1
-                    logging.critical('Consecutive error count: %d.  Total error count: %d.\n'
-                                  '                     Possible invalid Davis WeatherlinkIP username or password.\n'
-                                  '                     Verify credentials and check config.json file.',
-                                  data.error_count, data.master_error_count)
+                if response.status_code == 200:
+                    if response.text == 'Invalid Request!':
+                        data.error_count += 1
+                        data.master_error_count += 1
+                        logging.critical('Consecutive error count: %d.  Total error count: %d.\n'
+                                      '                     Possible invalid Davis WeatherlinkIP username or password.\n'
+                                      '                     Verify credentials and check config.json file.',
+                                      data.error_count, data.master_error_count)
 
-                    # This is likely a permanent error until fixed.  We will always return a failure regardless as to error count
-                    return (0, "Possible invalid Weatherlink user name or password")
+                        # This is likely a permanent error until fixed.  We will always return a failure regardless as to error count
+                        return (0, "Possible invalid Weatherlink user name or password")
 
-                else:  # We have a valid V1 response request
-                    try:
-                        results = response.json()
-                        
-                        # Set defaults in case no valid temp or UV readings returned.
-                        data.temp_now = data.UV = None
-                        data.temp_high = -999
-                        data.temp_low = 999
-                        
+                    else:  # We have a valid V1 response request
                         try:
-                            age = int(results['davis_current_observation']['observation_age'])
-                            if age > (5 * 60):  # if data is older than 5 minutes
+                            results = response.json()
+                            
+                            # Set defaults in case no valid temp or UV readings returned.
+                            data.temp_now = data.UV = None
+                            data.temp_high = -999
+                            data.temp_low = 999
+                            
+                            try:
+                                age = int(results['davis_current_observation']['observation_age'])
+                                if age > (5 * 60):  # if data is older than 5 minutes
+                                    data.error_count += 1
+                                    data.master_error_count += 1
+                                    logging.warning('Consecutive error count: %d.  Total error count: %d.\n'
+                                                    '                     Outdated data.  Data is %d minutes old.\n'
+                                                    '                     Check the local Davis Weatherlink transmitter device and its network\n'
+                                                    '                     connectivity.  There is nothing wrong with this display system!',
+                                                    data.error_count, data.master_error_count, int(age / 60))
+
+                                    # The first time we are here, data is already 5 minutes old so waiting 5 times = 10 minutes to error.
+                                    if data.error_count > 5:
+                                        return (0, "Outdated data.  Check local transmitter device")
+
+                                    # else we will just fall through and continue to grab the data even though it will be the same as last
+
+                                # if not an age issue, then reset our consecutive error count back to zero.
+                                else:
+                                    data.error_count = 0
+                                    
+                                # Get current temp
+                                try:
+                                    if data.config.use_Celsius:
+                                        data.temp_now = float(results['temp_c'])
+                                    else:
+                                        data.temp_now = float(results['temp_f'])
+                                        
+                                # Key could be missing if battery on main station is dead
+                                # If so, continue without error.  Value will be displayed as "---"
+                                except KeyError:
+                                    pass
+
+                                try:
+                                    data.temp_high = float(results['davis_current_observation']['temp_day_high_f'])
+                                    data.temp_low = float(results['davis_current_observation']['temp_day_low_f'])
+
+                                    if data.config.use_Celsius:
+                                        data.temp_high = round((data.temp_high - 32) * 5 / 9, 1)
+                                        data.temp_low = round((data.temp_low - 32) * 5 / 9, 1)
+
+                                except KeyError:
+                                    pass
+
+                                try:
+                                    data.UV = float(results['davis_current_observation']['uv_index'])
+                                    
+                                except KeyError:
+                                    pass
+
+                                return (1, "Success")
+
+                            except KeyError as err:
                                 data.error_count += 1
                                 data.master_error_count += 1
-                                logging.warning('Consecutive error count: %d.  Total error count: %d.\n'
-                                                '                     Outdated data.  Data is %d minutes old.\n'
-                                                '                     Check the local Davis Weatherlink transmitter device and its network\n'
-                                                '                     connectivity.  There is nothing wrong with this display system!',
-                                                data.error_count, data.master_error_count, int(age / 60))
+                                logging.error('Consecutive error count: %d.  Total error count: %d.\n'
+                                              '                     There was json error in the Davis data feed trying to read key: %s',
+                                              data.error_count, data.master_error_count, err)
 
-                                # The first time we are here, data is already 5 minutes old so waiting 5 times = 10 minutes to error.
                                 if data.error_count > 5:
-                                    return (0, "Outdated data.  Check local transmitter device")
-
-                                # else we will just fall through and continue to grab the data even though it will be the same as last
-
-                            # if not an age issue, then reset our consecutive error count back to zero.
-                            else:
-                                data.error_count = 0
-                                
-                            # Get current temp
-                            try:
-                                if data.config.use_Celsius:
-                                    data.temp_now = float(results['temp_c'])
+                                    return (0, f"JSON key error: {err}")
                                 else:
-                                    data.temp_now = float(results['temp_f'])
+                                    return (1, f"JSON key error: {err}")
+
+                        except json.decoder.JSONDecodeError as err:
+                            data.error_count += 1
+                            data.master_error_count += 1
+                            logging.error('Consecutive error count: %d.  Total error count: %d.\n'
+                                          '                     Invalid JSON file: %s',
+                                          data.error_count, data.master_error_count, err)
+
+                            if data.error_count > 5:
+                                return (0, f"JSON error: {err}")
+                            else:
+                                return (1, "Warning")
+
+                else:  # we got a V1 response code != 200
+                    data.error_count += 1
+                    data.master_error_count += 1
+                    logging.error('Consecutive error count: %d.  Total error count: %d.\n'
+                                  '                     HTTP Error: %s',
+                                  data.error_count, data.master_error_count, response.status_code)
+
+                    if data.error_count > 5:
+                        return (0, f"Network HTTP error: {response.status_code}")
+                    else:
+                        return (1, "Warning")
+            # End with requests.get()...
+
+        except requests.exceptions.ConnectionError as err:
+
+            # Internet / network is lost
+            data.error_count += 1
+            data.master_error_count += 1
+            logging.error('Consecutive error count: %d.  Total error count: %d.\n'
+                          '                     Encountered a network connection error: %s',
+                          data.error_count, data.master_error_count, err)
+
+            if data.error_count > 10:
+                # Giving up on restarting WiFi.  Let's reboot
+                logging.critical('No WiFi.  Rebooting Pi')
+                os.system("sudo shutdown -r now")
+
+            if data.error_count > 5:
+                # In case dead WiFi due to Pi, will try restarting WiFi...
+                subprocess.run(["sudo", "ip", "link", "set", "wlan0", "down"], check=True)
+                sleep(2)
+                subprocess.run(["sudo", "ip", "link", "set", "wlan0", "up"], check=True)
+                
+                return (0, f"Network connection error.  Check WiFi Will retry...")
+            else:
+                return (1, "Warning")
+
+    else:  # V1 username was blank so use V2 interface
+        DAVIS_V2_API_BASE = "https://api.weatherlink.com/v2/stations?"
+        DAVIS_V2_API_URL = DAVIS_V2_API_BASE + "api-key=" + data.config.davis_key
+
+        try:
+            with requests.get(
+                headers={
+                    "X-Api-Secret": data.config.davis_secret
+                },
+                url=DAVIS_V2_API_URL,
+                verify=True, timeout=10) as response:
+            
+                if response.status_code == 200:
+                    try:
+                        results = response.json()
+                        try:
+                            station_id = ''
+                            # If only one station on this WeatherLink account, use it regardless of name match
+                            if len(results) == 1:
+                                station_id = results['stations'][0]['station_id']
+                            else:  # Loop through all stations until we find the matching one
+                                for i in range(len(results)):
+                                    if results['stations'][i]['station_name'] == data.config.davis_station_name:
+                                        # Grab the internal ID for that station to be used below
+                                        station_id = results['stations'][i]['station_id']
+                                        break
+
+                            if station_id:
+                                # we now have the ID of the V2 API station that we will be using so let's get
+                                # the current readings from all the sensors associated with that station.
+                                DAVIS_V2_API_BASE = "https://api.weatherlink.com/v2/current/"
+                                DAVIS_V2_API_URL = DAVIS_V2_API_BASE + str(station_id) + "?api-key=" + data.config.davis_key
+
+                                with requests.get(
+                                    headers={
+                                        "X-Api-Secret": data.config.davis_secret
+                                    },
+                                    url=DAVIS_V2_API_URL,
+                                    verify=True, timeout=10) as response:
+
+                                    if response.status_code == 200:
+                                        results = response.json()
+
+                                        temp = uv = timestamp = None  # Set a default in case no valid temp or UV readings returned.
+                                        try:
+                                            i = 0
+                                            while True:  # loop through the various sensors found on this station
+                                                keys = []
+                                                if results['sensors'][i]['data_structure_type'] == 23:
+                                                    # This is from a Davis 6313 Console
+                                                    keys = ["temp", "uv_index", "ts"]
+                                                elif results['sensors'][i]['data_structure_type'] == 2:
+                                                    # This is from a WeatherLinkIP device
+                                                    keys = ["temp_out", "uv", "ts"]
+
+                                                if keys:
+                                                    if temp is None:
+                                                        try:
+                                                            temp = results['sensors'][i]['data'][0][keys[0]]
+                                                            if temp is not None:
+                                                                # Get the timestamp belonging to this sensor that we grabbed temperature from.
+                                                                timestamp = int(results['sensors'][i]['data'][0][keys[2]])
+                                                        # Ignore error if temp sensor fails.  UV will still display.
+                                                        # User should see sensor is missing in local console.
+                                                        except KeyError:
+                                                            pass
+
+                                                    if uv is None:
+                                                        try:
+                                                            uv = results['sensors'][i]['data'][0][keys[1]]
+                                                            if uv is not None and timestamp is None:
+                                                                timestamp = int(results['sensors'][i]['data'][0][keys[2]])
+                                                        # Ignore error if UV sensor fails.  Temperature will still display.
+                                                        # User should see sensor is missing in local console.
+                                                        except KeyError:
+                                                            pass
+
+                                                i += 1  # next sensor
+                                        except IndexError:  # end of sensor loop
+                                            pass
+
+                                        #  A zero-cost subscription provides 15 minute interval updates so anything over that means out of date.
+                                        if timestamp is not None and ((datetime.now()-datetime.fromtimestamp(timestamp)).total_seconds() / 60) > 16:
+                                            data.error_count += 1
+                                            data.master_error_count += 1
+                                            logging.warning('Consecutive error count: %d.  Total error count: %d.\n'
+                                                            '                     Outdated data.  Data is %d minutes old.\n'
+                                                            '                     Check the local Davis Weatherlink transmitter device and its network\n'
+                                                            '                     connectivity.  There is nothing wrong with this display system!',
+                                                            data.error_count, data.master_error_count,
+                                                            round((datetime.now()-datetime.fromtimestamp(timestamp)).total_seconds() / 60))
+
+                                            # The first time we are here, data is already 15 minutes old so waiting 5 more times = 20 minutes to error.
+                                            if data.error_count > 5:
+                                                return (0, "Outdated data.  Check local transmitter device")
+
+                                        # if not an age issue, then data is all good. Reset our consecutive error count back to zero.
+                                        else:
+                                            data.error_count = 0
+
+                                        # Even if age was too old, but under 5 consecutive times, we will just fall through
+                                        #  and continue to grab the data even though it will be the same as last
+
+                                        if temp is not None:
+                                            if data.config.use_Celsius:
+                                                data.temp_now = round((float(temp) - 32) / 9 * 5, 1)
+                                            else:
+                                                data.temp_now = float(temp)
+                                        else:
+                                            data.temp_now = None
+
+                                        if uv is not None:
+                                            data.UV = float(uv)
+                                        else:
+                                            data.UV = None
+
+                                        # Check to see if we have a new daily high or low
+                                        # if previous hi/lo date is different than now or if we have a new high or new low,
+                                        # then set our new hi/lo values and update the file
+                                        if data.hi_low_date != datetime.now().timetuple().tm_yday:
+                                            #  we have a new day for highs and lows
+                                            data.hi_low_date = datetime.now().timetuple().tm_yday
+                                            data.temp_high = -999
+                                            data.temp_low = 999
+
+                                        # new high or new low?
+                                        if data.temp_now is not None:
+                                            if data.temp_now > data.temp_high or data.temp_now < data.temp_low:
+                                                if data.temp_now > data.temp_high:
+                                                    data.temp_high = data.temp_now
+                                                if data.temp_now < data.temp_low:
+                                                    data.temp_low = data.temp_now
+
+                                                filename = "high-lows.data"
+
+                                                with open(filename, "w") as file:
+                                                    file.write(f"{data.hi_low_date} {data.temp_high} {data.temp_low}")
+
+                                        return 1, "Success"
+
+                                    else: # response.status_code != 200
+                                        # One possible error here is 404 {"code":"404","message":"Unable to find weather station settings"}
+                                        # But don't know if others are possible
+                                        data.error_count += 1
+                                        data.master_error_count += 1
+
+                                        results = response.json()
+                                        logging.error('Consecutive error count: %d.  Total error count: %d.\n'
+                                                      '                     HTTP Error: %s.  %s',
+                                                      data.error_count, data.master_error_count, response.status_code, results['message'])
+
+                                        if data.error_count > 5:
+                                            return (0, f"Network HTTP error: {response.status_code}")
+                                        else:
+                                            return (1, "Warning")
+                                # End with requests.get()...
                                     
-                            # Key could be missing if battery on main station is dead
-                            # If so, continue without error.  Value will be displayed as "---"
-                            except KeyError:
-                                pass
+                            else:  # Could not find V2 station name
+                                data.error_count += 1
+                                data.master_error_count += 1
+                                logging.critical('Consecutive error count: %d.  Total error count: %d.\n'
+                                                 '                     Could not find station named: %s\n'
+                                                 '                     Verify credentials and check config.json file.',
+                                                 data.error_count, data.master_error_count, data.config.davis_station_name)
 
-                            try:
-                                data.temp_high = float(results['davis_current_observation']['temp_day_high_f'])
-                                data.temp_low = float(results['davis_current_observation']['temp_day_low_f'])
-
-                                if data.config.use_Celsius:
-                                    data.temp_high = round((data.temp_high - 32) * 5 / 9, 1)
-                                    data.temp_low = round((data.temp_low - 32) * 5 / 9, 1)
-
-                            except KeyError:
-                                pass
-
-                            try:
-                                data.UV = float(results['davis_current_observation']['uv_index'])
-                                
-                            except KeyError:
-                                pass
-
-                            return (1, "Success")
+                                # This is likely a permanent error until fixed.  We will always return a failure regardless as to error count
+                                return (0, "Possible invalid Weatherlink station name")
 
                         except KeyError as err:
                             data.error_count += 1
@@ -378,258 +607,32 @@ def get_temp(data):
                         else:
                             return (1, "Warning")
 
-            else:  # we got a V1 response code != 200
-                data.error_count += 1
-                data.master_error_count += 1
-                logging.error('Consecutive error count: %d.  Total error count: %d.\n'
-                              '                     HTTP Error: %s',
-                              data.error_count, data.master_error_count, response.status_code)
-
-                if data.error_count > 5:
-                    return (0, f"Network HTTP error: {response.status_code}")
-                else:
-                    return (1, "Warning")
-
-
-        except requests.exceptions.ConnectionError as err:
-
-            # Internet / network is lost
-            data.error_count += 1
-            data.master_error_count += 1
-            logging.error('Consecutive error count: %d.  Total error count: %d.\n'
-                          '                     Encountered a network connection error: %s',
-                          data.error_count, data.master_error_count, err)
-
-            if data.error_count > 5:
-                # In case dead wifi due to Pi, will try restarting it...
-                os.system("sudo ip link set wlan0 down")
-                time.sleep(2)
-                os.system("sudo ip link set wlan0 up")
-                
-                return (0, f"Network connection error.  Check WiFi Will retry...")
-            else:
-                return (1, "Warning")
-
-    else:  # V1 username was blank so use V2 interface
-        DAVIS_V2_API_BASE = "https://api.weatherlink.com/v2/stations?"
-        DAVIS_V2_API_URL = DAVIS_V2_API_BASE + "api-key=" + data.config.davis_key
-
-        try:
-            response = requests.get(
-                headers={
-                    "X-Api-Secret": data.config.davis_secret
-                },
-                url=DAVIS_V2_API_URL,
-                verify=True,
-            )
-            response.close()
-            
-            if response.status_code == 200:
-                try:
-                    results = response.json()
-                    try:
-                        station_id = ''
-                        # If only one station on this WeatherLink account, use it regardless of name match
-                        if len(results) == 1:
-                            station_id = results['stations'][0]['station_id']
-                        else:  # Loop through all stations until we find the matching one
-                            for i in range(len(results)):
-                                if results['stations'][i]['station_name'] == data.config.davis_station_name:
-                                    # Grab the internal ID for that station to be used below
-                                    station_id = results['stations'][i]['station_id']
-                                    break
-
-                        if station_id:
-                            # we now have the ID of the V2 API station that we will be using so let's get
-                            # the current readings from all the sensors associated with that station.
-                            DAVIS_V2_API_BASE = "https://api.weatherlink.com/v2/current/"
-                            DAVIS_V2_API_URL = DAVIS_V2_API_BASE + str(station_id) + "?api-key=" + data.config.davis_key
-
-                            response = requests.get(
-                                headers={
-                                    "X-Api-Secret": data.config.davis_secret
-                                },
-                                url=DAVIS_V2_API_URL,
-                                verify=True,
-                            )
-                            response.close()
-
-                            if response.status_code == 200:
-                                results = response.json()
-
-                                temp = uv = timestamp = None  # Set a default in case no valid temp or UV readings returned.
-                                try:
-                                    i = 0
-                                    while True:  # loop through the various sensors found on this station
-                                        keys = []
-                                        if results['sensors'][i]['data_structure_type'] == 23:
-                                            # This is from a Davis 6313 Console
-                                            keys = ["temp", "uv_index", "ts"]
-                                        elif results['sensors'][i]['data_structure_type'] == 2:
-                                            # This is from a WeatherLinkIP device
-                                            keys = ["temp_out", "uv", "ts"]
-
-                                        if keys:
-                                            if temp is None:
-                                                try:
-                                                    temp = results['sensors'][i]['data'][0][keys[0]]
-                                                    if temp is not None:
-                                                        # Get the timestamp belonging to this sensor that we grabbed temperature from.
-                                                        timestamp = int(results['sensors'][i]['data'][0][keys[2]])
-                                                # Ignore error if temp sensor fails.  UV will still display.
-                                                # User should see sensor is missing in local console.
-                                                except KeyError:
-                                                    pass
-
-                                            if uv is None:
-                                                try:
-                                                    uv = results['sensors'][i]['data'][0][keys[1]]
-                                                    if uv is not None and timestamp is None:
-                                                        timestamp = int(results['sensors'][i]['data'][0][keys[2]])
-                                                # Ignore error if UV sensor fails.  Temperature will still display.
-                                                # User should see sensor is missing in local console.
-                                                except KeyError:
-                                                    pass
-
-                                        i += 1  # next sensor
-                                except IndexError:  # end of sensor loop
-                                    pass
-
-                                #  A zero-cost subscription provides 15 minute interval updates so anything over that means out of date.
-                                if timestamp is not None and ((datetime.now()-datetime.fromtimestamp(timestamp)).total_seconds() / 60) > 16:
-                                    data.error_count += 1
-                                    data.master_error_count += 1
-                                    logging.warning('Consecutive error count: %d.  Total error count: %d.\n'
-                                                    '                     Outdated data.  Data is %d minutes old.\n'
-                                                    '                     Check the local Davis Weatherlink transmitter device and its network\n'
-                                                    '                     connectivity.  There is nothing wrong with this display system!',
-                                                    data.error_count, data.master_error_count,
-                                                    round((datetime.now()-datetime.fromtimestamp(timestamp)).total_seconds() / 60))
-
-                                    # The first time we are here, data is already 15 minutes old so waiting 5 more times = 20 minutes to error.
-                                    if data.error_count > 5:
-                                        return (0, "Outdated data.  Check local transmitter device")
-
-                                # if not an age issue, then data is all good. Reset our consecutive error count back to zero.
-                                else:
-                                    data.error_count = 0
-
-                                # Even if age was too old, but under 5 consecutive times, we will just fall through
-                                #  and continue to grab the data even though it will be the same as last
-
-                                if temp is not None:
-                                    if data.config.use_Celsius:
-                                        data.temp_now = round((float(temp) - 32) / 9 * 5, 1)
-                                    else:
-                                        data.temp_now = float(temp)
-                                else:
-                                    data.temp_now = None
-
-                                if uv is not None:
-                                    data.UV = float(uv)
-                                else:
-                                    data.UV = None
-
-                                # Check to see if we have a new daily high or low
-                                # if previous hi/lo date is different than now or if we have a new high or new low,
-                                # then set our new hi/lo values and update the file
-                                if data.hi_low_date != datetime.now().timetuple().tm_yday:
-                                    #  we have a new day for highs and lows
-                                    data.hi_low_date = datetime.now().timetuple().tm_yday
-                                    data.temp_high = -999
-                                    data.temp_low = 999
-
-                                # new high or new low?
-                                if data.temp_now is not None:
-                                    if data.temp_now > data.temp_high or data.temp_now < data.temp_low:
-                                        if data.temp_now > data.temp_high:
-                                            data.temp_high = data.temp_now
-                                        if data.temp_now < data.temp_low:
-                                            data.temp_low = data.temp_now
-
-                                        filename = "high-lows.data"
-
-                                        with open(filename, "w") as file:
-                                            file.write(f"{data.hi_low_date} {data.temp_high} {data.temp_low}")
-
-                                return 1, "Success"
-
-                            else:
-                                # One possible error here is 404 {"code":"404","message":"Unable to find weather station settings"}
-                                # But don't know if others are possible
-                                data.error_count += 1
-                                data.master_error_count += 1
-
-                                results = response.json()
-                                logging.error('Consecutive error count: %d.  Total error count: %d.\n'
-                                              '                     HTTP Error: %s.  %s',
-                                              data.error_count, data.master_error_count, response.status_code, results['message'])
-
-                                if data.error_count > 5:
-                                    return (0, f"Network HTTP error: {response.status_code}")
-                                else:
-                                    return (1, "Warning")
-                                
-                        else:  # Could not find V2 station name
-                            data.error_count += 1
-                            data.master_error_count += 1
-                            logging.critical('Consecutive error count: %d.  Total error count: %d.\n'
-                                             '                     Could not find station named: %s\n'
-                                             '                     Verify credentials and check config.json file.',
-                                             data.error_count, data.master_error_count, data.config.davis_station_name)
-
-                            # This is likely a permanent error until fixed.  We will always return a failure regardless as to error count
-                            return (0, "Possible invalid Weatherlink station name")
-
-                    except KeyError as err:
-                        data.error_count += 1
-                        data.master_error_count += 1
-                        logging.error('Consecutive error count: %d.  Total error count: %d.\n'
-                                      '                     There was json error in the Davis data feed trying to read key: %s',
-                                      data.error_count, data.master_error_count, err)
-
-                        if data.error_count > 5:
-                            return (0, f"JSON key error: {err}")
-                        else:
-                            return (1, f"JSON key error: {err}")
-
-                except json.decoder.JSONDecodeError as err:
+                else:  # Was not a 200 response code for V2.  Possible 401 code?
+                    # Bad key:  401 {"message":"Invalid authentication credentials"}
+                    # Bad secret: 401 {"code":"401","message":"Invalid API Key/API Secret."}
+                    # Could be others?
                     data.error_count += 1
                     data.master_error_count += 1
-                    logging.error('Consecutive error count: %d.  Total error count: %d.\n'
-                                  '                     Invalid JSON file: %s',
-                                  data.error_count, data.master_error_count, err)
+                    if response.status_code == 401:
+                        logging.error('Consecutive error count: %d.  Total error count: %d.\n'
+                                      '                     HTTP Error: %s\n'
+                                      '                     Possible invalid Davis Weatherlink API V2 key or secret.\n'
+                                      '                     Verify credentials and check config.json file.',
+                                      data.error_count, data.master_error_count, response.status_code)
+                    else:
+                        logging.error('Consecutive error count: %d.  Total error count: %d.\n'
+                                      '                     HTTP Error: %s',
+                                      data.error_count, data.master_error_count, response.status_code)
 
                     if data.error_count > 5:
-                        return (0, f"JSON error: {err}")
+                        if response.status_code == 401:
+                            return (0, f"Network HTTP error: {response.status_code}. Bad API key or secret?")
+                        else:
+                            return (0, f"Network HTTP error: {response.status_code}")
                     else:
                         return (1, "Warning")
-
-            else:  # Was not a 200 response code for V2.  Possible 401 code?
-                # Bad key:  401 {"message":"Invalid authentication credentials"}
-                # Bad secret: 401 {"code":"401","message":"Invalid API Key/API Secret."}
-                # Could be others?
-                data.error_count += 1
-                data.master_error_count += 1
-                if response.status_code == 401:
-                    logging.error('Consecutive error count: %d.  Total error count: %d.\n'
-                                  '                     HTTP Error: %s\n'
-                                  '                     Possible invalid Davis Weatherlink API V2 key or secret.\n'
-                                  '                     Verify credentials and check config.json file.',
-                                  data.error_count, data.master_error_count, response.status_code)
-                else:
-                    logging.error('Consecutive error count: %d.  Total error count: %d.\n'
-                                  '                     HTTP Error: %s',
-                                  data.error_count, data.master_error_count, response.status_code)
-
-                if data.error_count > 5:
-                    if response.status_code == 401:
-                        return (0, f"Network HTTP error: {response.status_code}. Bad API key or secret?")
-                    else:
-                        return (0, f"Network HTTP error: {response.status_code}")
-                else:
-                    return (1, "Warning")
-
+            # End with requests.get()...
+                    
         except requests.exceptions.ConnectionError as err:
 
             # Internet / network is lost
@@ -639,11 +642,16 @@ def get_temp(data):
                           '                     Encountered a network connection error: %s',
                           data.error_count, data.master_error_count, err)
 
+            if data.error_count > 10:
+                # Giving up on restarting WiFi.  Let's reboot
+                logging.critical('No WiFi.  Rebooting Pi')
+                os.system("sudo shutdown -r now")
+
             if data.error_count > 5:
-                # In case dead wifi due to Pi, will try restarting it...
-                os.system("sudo ip link set wlan0 down")
-                time.sleep(2)
-                os.system("sudo ip link set wlan0 up")
+                # In case dead WiFi due to Pi, will try restarting WiFi...
+                subprocess.run(["sudo", "ip", "link", "set", "wlan0", "down"], check=True)
+                sleep(2)
+                subprocess.run(["sudo", "ip", "link", "set", "wlan0", "up"], check=True)
                 
                 return (0, f"Network connection error.  Check WiFi Will retry...")
             else:
@@ -772,9 +780,7 @@ def set_brightness(data):
 
     if data.config.use_sensor and data.lux_sensor_available:
         try:
-            sensor = adafruit_veml7700.VEML7700(data.i2c)
-
-            data.light=sensor.light
+            data.light=data.sensor.light
 
             # map sensor brightness levels to matrix brightness percentage equivalent
             light_in =   [2000, 500, 200, 50,  0]
@@ -984,7 +990,7 @@ def on_key_press(data, key):
             # CPU T:##.# Err:###
             # Lt:### Bright:###%
             message="Up:%3d Mem Use:%2d%%" % ((datetime.now()-data.start_time).days, psutil.virtual_memory().percent)
-            message += " CPU T:%4.1f Err:%3d" % (CPUTemperature().temperature, data.master_error_count )
+            message += " CPU T:%4.1f Err:%3d" % (data.cputemp().temperature, data.master_error_count )
             message += " Lt:"
             if data.light > 999:
                 message += "%2dk" % int(data.light/1000)
@@ -998,100 +1004,104 @@ def on_key_press(data, key):
 def main_loop(data):
     # this loop is executed every 60 seconds
 
-    # go get and set the matrix brightness
-    set_brightness(data)
+    while True:
+        # go get and set the matrix brightness
+        set_brightness(data)
 
-    # see if we are in the non-operational hours
-    current = datetime.strptime(datetime.now().strftime("%H:%M"), "%H:%M").time()
+        # see if we are in the non-operational hours
+        current = datetime.strptime(datetime.now().strftime("%H:%M"), "%H:%M").time()
 
-    if not data.config.op_hours_24_hours_per_day and not (data.config.open_at <= current < data.config.closed_at):
-        # closed hours
+        if not data.config.op_hours_24_hours_per_day and not (data.config.open_at <= current < data.config.closed_at):
+            # closed hours
+            
+            # Even if it is after hours, if we are using the V2 API, we must continuously
+            # read the temperature so that the daily highs and lows can be maintained
+            # by this program even though we are not displaying anything during this period.
+            # FYI: The V1 API maintains its own high/lows and when using V1, we read
+            # those directly.
+            if data.config.davis_user == "":  # Using V2 API
+                get_temp(data)
+                
+            # if the after hours timer has never been initialize or we are just entering after hours for the first time today...
+            if not data.timer_blink or not data.after_hours:
+
+                data.after_hours = True
+                Blink_pixel(data).blink()
+
+        else:  # opening hours
+
+            success, msg = get_temp(data)
+
+            # This will cause the after hours blinking to not re-trigger itself.
+            data.after_hours = False
+
+            if success:
+                # We have good data for displaying
+                
+                if not data.config.show_UV:
+                    data.show_hi_lo_temp = True
+
+                elif not is_sun_above(data):
+                    # This sun is not high in the sky so show the high/lows
+                    data.show_hi_lo_temp = True
+
+                elif data.config.show_temp_with_UV:
+                    # Sun high in the sky (show UV) but you wanted to still show high/lows initially
+                    data.show_hi_lo_temp = True
+
+                    # Set a timer to flip back to UV in a few (configurable) seconds
+                    data.timer_show_UV = threading.Timer(data.config.hi_lo_temp_length_seconds, enable_UV, [data])
+                    data.timer_show_UV.start()
+
+                else:  # The sun is above and we want only UV
+                    data.show_hi_lo_temp = False
+
+                refresh_display(data)
+
+            else:  # We had an error while attempting to get our weather data
+                error_display(data, msg)
+
+        # For monitoring purposes, send IoT feed CPU temperature every 10 minutes
+        # If enabled, an email notification is sent if nothing received after one hour.
+        if datetime.now().minute % 10 == 0:
+            try:
+                #  CPU T:61.3 Err:123 Up:123 Mem Use:45% Light:30k Brightness:100%
+                message = "CPU T:%4.1f Err:%3d" % (data.cputemp().temperature, data.master_error_count )
+                message += " Up:%3d Mem Use:%2d%%" % ((datetime.now()-data.start_time).days, psutil.virtual_memory().percent)
+                message += " Light:"
+                if data.light > 999:
+                    message += "%2dk" % int(data.light/1000)
+                else:
+                    message += "%3d" % data.light
+                message += " Brightness:%3d%%" % data.matrix.brightness
+
+                data.io_client.send(data.config.adafruitIO_feed, message)
+                
+            except (requests.exceptions.RequestException, RequestError):
+                pass
+                # We don't care if this fails or why as we will
+                # receive the email notification after one hour
+                # First exception above captures Connection error timeouts
+                # and second exception captures a bad API key
+                
+            except Exception as err:
+                # Catch anything else here
+                data.master_error_count += 1
+                logging.error(f'Total error count: {data.master_error_count}.\n'
+                    f'                     An unhandled exception occurred. {type(err).__name__}: {err}')
+
+        # Fire this main loop again in 60 seconds
+        sleep(60)
         
-        # Even if it is after hours, if we are using the V2 API, we must continuously
-        # read the temperature so that the daily highs and lows can be maintained
-        # by this program even though we are not displaying anything during this period.
-        # FYI: The V1 API maintains its own high/lows and when using V1, we read
-        # those directly.
-        if data.config.davis_user == "":  # Using V2 API
-            get_temp(data)
-            
-        # if the after hours timer has never been initialize or we are just entering after hours for the first time today...
-        if not data.timer_blink or not data.after_hours:
-
-            data.after_hours = True
-            Blink_pixel(data).blink()
-
-    else:  # opening hours
-
-        success, msg = get_temp(data)
-
-        # This will cause the after hours blinking to not re-trigger itself.
-        data.after_hours = False
-
-        if success:
-            # We have good data for displaying
-            
-            if not data.config.show_UV:
-                data.show_hi_lo_temp = True
-
-            elif not is_sun_above(data):
-                # This sun is not high in the sky so show the high/lows
-                data.show_hi_lo_temp = True
-
-            elif data.config.show_temp_with_UV:
-                # Sun high in the sky (show UV) but you wanted to still show high/lows initially
-                data.show_hi_lo_temp = True
-
-                # Set a timer to flip back to UV in a few (configurable) seconds
-                data.timer_show_UV = threading.Timer(data.config.hi_lo_temp_length_seconds, enable_UV, [data])
-                data.timer_show_UV.start()
-
-            else:  # The sun is above and we want only UV
-                data.show_hi_lo_temp = False
-
-            refresh_display(data)
-
-        else:  # We had an error while attempting to get our weather data
-            error_display(data, msg)
-
-    # For monitoring purposes, send IoT feed CPU temperature every 10 minutes
-    # If enabled, an email notification is sent if nothing received after one hour.
-    if datetime.now().minute % 10 == 0:
-        try:
-            #  CPU T:61.3 Err:123 Up:123 Mem Use:45% Light:30k Brightness:100%
-            message = "CPU T:%4.1f Err:%3d" % (CPUTemperature().temperature, data.master_error_count )
-            message += " Up:%3d Mem Use:%2d%%" % ((datetime.now()-data.start_time).days, psutil.virtual_memory().percent)
-            message += " Light:"
-            if data.light > 999:
-                message += "%2dk" % int(data.light/1000)
-            else:
-                message += "%3d" % data.light
-            message += " Brightness:%3d%%" % data.matrix.brightness
-
-            data.io_client.send(data.config.adafruitIO_feed, message)
-            
-        except (requests.exceptions.RequestException, RequestError):
-            pass
-            # We don't care if this fails or why as we will
-            # receive the email notification after one hour
-            # First exception above captures Connection error timeouts
-            # and second exception captures a bad API key
-            
-        except Exception as err:
-            # Catch anything else here
-            data.master_error_count += 1
-            logging.error(f'Total error count: {data.master_error_count}.\n'
-                f'                     An unhandled exception occurred. {type(err).__name__}: {err}')
-
-    # Fire this main loop again in 60 seconds
-    data.timer_main = threading.Timer(60, main_loop, [data])
-    data.timer_main.start()
+    #End while True:
 
 
 def run():
 
-    # Create up to 2 backups of logfiles if they exist
+    # Create up to 3 backups of logfiles if they exist
     filename = 'logfile.'
+    if os.path.exists(filename+'2'):
+        shutil.copy2(filename+'2', filename+'3')
     if os.path.exists(filename+'1'):
         shutil.copy2(filename+'1', filename+'2')
     if os.path.exists(filename+'log'):
@@ -1132,21 +1142,20 @@ def run():
     listener.start()
 
     try:
+        # main_loop runs in an infinite While True loop
         main_loop(data)
 
-        while True:
-            pass
 
     except KeyboardInterrupt:
 
         # Kill any timers that were running
-        if data.timer_main:
-            data.timer_main.cancel()
         if data.timer_blink:
             data.timer_blink.cancel()
         if data.timer_show_UV:
             data.timer_show_UV.cancel()
-            
+
+        listener.stop()
+        
         logging.info('Exiting temperature display')
         raise KeyboardInterrupt
 
